@@ -8,8 +8,17 @@
 struct RayPayload
 {
     float3 radiance;
+    float3 origin;
+    float3 direction;
+    float3 attenuation;
 	uint seed;
 	uint depth;
+    bool done;
+};
+
+struct RayPayload_shadow
+{
+    bool inShadow;
 };
 
 // Attributes output by the raytracing when hitting a surface,
@@ -41,6 +50,21 @@ struct MaterialData
     int NormalMapIdx;
     int MaterialPad0;
     int MaterialPad1;
+};
+
+struct ParallelogramLight
+{
+    float3 corner;
+    float3 v1;
+    float3 v2;
+    float3 normal;
+    float3 emission;
+    float lightPad0;
+};
+
+struct Vertex
+{
+    float3 pos;
 };
 
 #endif

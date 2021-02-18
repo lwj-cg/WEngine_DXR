@@ -34,13 +34,13 @@ void inverse_transform_with_onb(inout float3 n, Onb onb)
     n = (n.z * onb.w + n.x * onb.u + n.y * onb.v);
 }
 
-RayDesc make_Ray(float3 origin, float3 direction)
+RayDesc make_Ray(float3 origin, float3 direction, float tmin=0.001f, float tmax=100000)
 {
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
-    ray.TMin = 0;
-    ray.TMax = 100000;
+    ray.TMin = tmin;
+    ray.TMax = tmax;
     return ray;
 }
 

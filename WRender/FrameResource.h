@@ -128,12 +128,34 @@ struct WMaterialData
 struct WRenderItem
 {
     UINT matIdx;
+    std::string objName;
     std::string geometryName;
     UINT64 vertexOffsetInBytes;  // Offset of the first vertex in the vertex buffer
     UINT32 vertexCount;    // Number of vertices to consider in the buffer
     UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
     UINT32 indexCount;    // Number of indices to consider in the buffer
     DirectX::XMMATRIX transform;
+};
+
+struct ParallelogramLight
+{
+    typedef DirectX::XMFLOAT3 XMFLOAT3;
+    DirectX::XMFLOAT3 corner = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 v1 = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 v2 = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 normal = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 emission = { 0.0f, 0.0f, 0.0f };
+    float lightPad0;
+
+    ParallelogramLight() = default;
+    ParallelogramLight(XMFLOAT3 _corner, XMFLOAT3 _v1, XMFLOAT3 _v2, XMFLOAT3 _emission)
+        : corner(_corner), v1(_v1), v2(_v2), emission(_emission)
+    {
+        auto fv1 = DirectX::XMLoadFloat3(&v1);
+        auto fv2 = DirectX::XMLoadFloat3(&v2);
+        auto fnormal = DirectX::XMVector3Cross(fv1, fv2);
+        DirectX::XMStoreFloat3(&normal, fnormal);
+    }
 };
 
 // Stores the resources needed for the CPU to build the command lists

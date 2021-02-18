@@ -202,16 +202,22 @@ private:
 	ComPtr<ID3D12RootSignature> CreateRayGenSignature();
 	ComPtr<ID3D12RootSignature> CreateMissSignature();
 	ComPtr<ID3D12RootSignature> CreateHitSignature();
+	ComPtr<ID3D12RootSignature> CreateEmptySignature();
 
 	void CreateRayTracingPipeline();
 
 	ComPtr<IDxcBlob> m_rayGenLibrary;
 	ComPtr<IDxcBlob> m_hitLibrary;
+	ComPtr<IDxcBlob> m_hitDiffuseLibrary;
 	ComPtr<IDxcBlob> m_missLibrary;
+	ComPtr<IDxcBlob> m_hitShadowLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
+	ComPtr<ID3D12RootSignature> m_hitShadowSignature;
+	ComPtr<ID3D12RootSignature> m_hitDiffuseSignature;
 	ComPtr<ID3D12RootSignature> m_missSignature;
+	ComPtr<ID3D12RootSignature> m_missShadowSignature;
 
 	// Ray tracing pipeline state
 	ComPtr<ID3D12StateObject> m_rtStateObject;
@@ -259,6 +265,10 @@ private:
 
 	// Per Pass Data
 	WPassConstants mPassCB;
+
+	// Light Buffer
+	ComPtr<ID3D12Resource> mLightBuffer = nullptr;
+	ComPtr<ID3D12Resource> mLightBufferUploader = nullptr;
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
@@ -1092,6 +1102,7 @@ ComPtr<ID3D12RootSignature> MainApp::CreateHitSignature() {
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 2);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 3);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 4);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 5);
 	rsc.AddHeapRangesParameter(
 		{
 			{
@@ -1100,6 +1111,12 @@ ComPtr<ID3D12RootSignature> MainApp::CreateHitSignature() {
 				1
 			}
 		});
+	return rsc.Generate(md3dDevice.Get(), true);
+}
+
+ComPtr<ID3D12RootSignature> MainApp::CreateEmptySignature()
+{
+	nv_helpers_dx12::RootSignatureGenerator rsc;
 	return rsc.Generate(md3dDevice.Get(), true);
 }
 
@@ -1130,7 +1147,9 @@ void MainApp::CreateRayTracingPipeline()
 	// used.
 	m_rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\RayGen.hlsl");
 	m_missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Miss.hlsl");
-	m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
+	//m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
+	m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
+	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\AnyHit_Shadow.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1139,12 +1158,19 @@ void MainApp::CreateRayTracingPipeline()
 	// using the [shader("xxx")] syntax
 	pipeline.AddLibrary(m_rayGenLibrary.Get(), { L"RayGen" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss" });
-	pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit" });
+	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss_Shadow" });
+	//pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit" });
+	pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
+	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
 	// parameters and buffers will be accessed.
 	m_rayGenSignature = CreateRayGenSignature();
+	//m_hitSignature = CreateHitSignature();
+	m_hitDiffuseSignature = CreateHitSignature();
+	m_hitShadowSignature = CreateEmptySignature();
 	m_missSignature = CreateMissSignature();
-	m_hitSignature = CreateHitSignature();
+	m_missShadowSignature = CreateEmptySignature();
+	
 	// 3 different shaders can be invoked to obtain an intersection: an
 	// intersection shader is called
 	// when hitting the bounding box of non-triangular geometry. This is beyond
@@ -1153,7 +1179,9 @@ void MainApp::CreateRayTracingPipeline()
 	// discard some intersections. Finally, the closest-hit program is invoked on
 	// the intersection point closest to the ray origin. Those 3 shaders are bound
 	// together into a hit group.
-	pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
+	//pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
+	pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
+	pipeline.AddHitGroup(L"HitGroup_Shadow", L"", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
 	// that we can explicitly show that some shaders share the same root signature
@@ -1161,15 +1189,18 @@ void MainApp::CreateRayTracingPipeline()
 	// to as hit groups, meaning that the underlying intersection, any-hit and
 	// closest-hit shaders share the same root signature.
 	pipeline.AddRootSignatureAssociation(m_rayGenSignature.Get(), { L"RayGen" });
+	//pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup" });
+	pipeline.AddRootSignatureAssociation(m_hitDiffuseSignature.Get(), { L"HitGroup_Diffuse" });
+	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup" });
+	pipeline.AddRootSignatureAssociation(m_missShadowSignature.Get(), { L"Miss_Shadow" });
 
 	// The payload size defines the maximum size of the data carried by the rays,
 	// ie. the the data
 	// exchanged between shaders, such as the HitInfo structure in the HLSL code.
 	// It is important to keep this value as low as possible as a too high value
 	// would result in unnecessary memory consumption and cache trashing.
-	pipeline.SetMaxPayloadSize(10 * sizeof(float));
+	pipeline.SetMaxPayloadSize(15 * sizeof(float));
 
 	// Upon hitting a surface, DXR can provide several attributes to the hit. In
 	// our sample we just use the barycentric coordinates defined by the weights
@@ -1288,6 +1319,7 @@ void MainApp::CreateShaderBindingTable() {
 	auto materialBufferPointer = reinterpret_cast<UINT64*>(mMaterialBuffer->GetGPUVirtualAddress());
 	auto vertexBufferPointer = reinterpret_cast<UINT64*>(mVertexBuffer->GetGPUVirtualAddress());
 	auto indexBufferPointer = reinterpret_cast<UINT64*>(mIndexBuffer->GetGPUVirtualAddress());
+	auto lightBufferPointer = reinterpret_cast<UINT64*>(mLightBuffer->GetGPUVirtualAddress());
 	// The ray generation only uses heap data
 	m_sbtHelper.AddRayGenerationProgram(L"RayGen",
 		{
@@ -1300,16 +1332,28 @@ void MainApp::CreateShaderBindingTable() {
 	// The miss and hit shaders do not access any external resources: instead they
 	// communicate their results through the ray payload
 	m_sbtHelper.AddMissProgram(L"Miss", {});
+	m_sbtHelper.AddMissProgram(L"Miss_Shadow", {});
 
 	// Adding the triangle hit shader
-	m_sbtHelper.AddHitGroup(L"HitGroup",
+	/*m_sbtHelper.AddHitGroup(L"HitGroup",
 		{
 			objectCBPointer,
 			materialBufferPointer,
 			vertexBufferPointer,
 			indexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});*/
+	m_sbtHelper.AddHitGroup(L"HitGroup_Diffuse",
+		{
+			objectCBPointer,
+			materialBufferPointer,
+			vertexBufferPointer,
+			indexBufferPointer,
+			lightBufferPointer,
 			heapPointer
 		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",{});
 
 	// Compute the size of the SBT given the number of shaders and their
   // parameters
@@ -1377,6 +1421,7 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	const auto& vertexBuffer = mSceneDescParser.getVertexBuffer();
 	const auto& indexBuffer = mSceneDescParser.getIndexBuffer();
 	const auto& cameraConfig = mSceneDescParser.getCameraConfig();
+	const auto& lights = mSceneDescParser.getLights();
 
 	UINT64 vertexBufferSize = vertexBuffer.size() * sizeof(tinyobj::real_t);
 	mVertexBuffer = d3dUtil::CreateDefaultBuffer(
@@ -1393,6 +1438,21 @@ void MainApp::SetupSceneWithXML(const char* filename)
 		md3dDevice.Get(), mCommandList.Get(), materialBuffer.data(),
 		materialBufferSize, mMaterialBufferUploader
 	);
+	UINT64 lightBufferSize = lights.size() * sizeof(ParallelogramLight);
+	mLightBuffer = d3dUtil::CreateDefaultBuffer(
+		md3dDevice.Get(), mCommandList.Get(), lights.data(),
+		lightBufferSize, mLightBufferUploader
+	);
+
+	// Use Shader Resource View to declare the size of lightBuffer
+	//D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+	//srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	//srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	//srvDesc.Buffer.FirstElement = 0;			// 起始元素的索引
+	//srvDesc.Buffer.NumElements = lights.size();	// 元素数目
+
+	//ComPtr<ID3D11ShaderResourceView> mLightBufferView;
+	//ThrowIfFailed(md3dDevice->CreateShaderResourceView(mLightBuffer.Get(), &srvDesc, &(mLightBufferView.Get())));
 
 	std::vector<WObjectConstants> objectDataArray;
 	for (const auto& r : mRenderItems)

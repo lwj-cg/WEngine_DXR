@@ -1,3 +1,5 @@
+#ifndef RANDOM_H_
+#define RANDOM_H_
 // Some useful functions for random number generation
 
 inline unsigned int tea16(unsigned int val0, unsigned int val1)
@@ -118,3 +120,5 @@ float2 Hammersley(unsigned int Index, unsigned int NumSamples, uint2 Random)
 	float E2 = float(ReverseBits32(Index) ^ Random.y) * 2.3283064365386963e-10;
 	return float2(E1, E2);
 }
+
+#endif

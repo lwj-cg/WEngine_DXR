@@ -28,6 +28,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 			{
 				WRenderItem r;
 				const char* objectName = e->Attribute("name");
+				r.objName = objectName;
 				tinyxml2::XMLNode* materialNode = e->FirstChildElement("Material");
 				if (materialNode)
 				{
@@ -190,6 +191,32 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 			}
 			else if (nodeType == "light")
 			{
+				ParallelogramLight light;
+				DirectX::XMFLOAT3 corner = { 0.0f, 0.0f, 0.0f };
+				DirectX::XMFLOAT3 v1 = { 0.0f, 0.0f, 0.0f };
+				DirectX::XMFLOAT3 v2 = { 0.0f, 0.0f, 0.0f };
+				DirectX::XMFLOAT3 emission = { 0.0f, 0.0f, 0.0f };
+				tinyxml2::XMLElement* cornerElem = node->FirstChildElement("corner");
+				if (cornerElem)
+				{
+					corner = parseFloat3(cornerElem->GetText());
+				}
+				tinyxml2::XMLElement* v1Elem = node->FirstChildElement("v1");
+				if (v1Elem)
+				{
+					v1 = parseFloat3(v1Elem->GetText());
+				}
+				tinyxml2::XMLElement* v2Elem = node->FirstChildElement("v2");
+				if (v2Elem)
+				{
+					v2 = parseFloat3(v2Elem->GetText());
+				}
+				tinyxml2::XMLElement* emissionElem = node->FirstChildElement("emission");
+				if (emissionElem)
+				{
+					emission = parseFloat3(emissionElem->GetText());
+				}
+				mLights.emplace_back(corner,v1,v2,emission);
 			}
 			else if (nodeType == "camera")
 			{

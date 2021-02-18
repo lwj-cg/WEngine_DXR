@@ -47,6 +47,7 @@ public:
 	std::vector<tinyobj::real_t>& getVertexBuffer() { return mVertexBuffer; };
 	std::vector<UINT32>& getIndexBuffer() { return mIndexBuffer; };
 	WCamereConfig& getCameraConfig() { return mCameraConfig; };
+	std::vector<ParallelogramLight>& getLights() { return mLights; }
 private:
 	tinyxml2::XMLDocument mXMLParser;
 	std::map<std::string, WGeometryRecord> mGeometryMap;
@@ -54,6 +55,7 @@ private:
 	std::vector<WMaterialData> mMaterialBuffer;
 	std::vector<tinyobj::real_t> mVertexBuffer;
 	std::vector<UINT32> mIndexBuffer;
+	std::vector<ParallelogramLight> mLights;
 	WCamereConfig mCameraConfig;
 };
 
