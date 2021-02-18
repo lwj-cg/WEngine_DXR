@@ -47,7 +47,7 @@ RayDesc make_Ray(float3 origin, float3 direction, float tmin=0.001f, float tmax=
 // reflect l with n
 float3 reflect(float3 l, float3 n)
 {
-    return l - 2*dot(l, n)*n;
+    return l - 2 * dot(l, n) * n;
 }
 
 // refract i with n

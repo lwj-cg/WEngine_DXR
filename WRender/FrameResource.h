@@ -40,6 +40,10 @@ struct WPassConstants
     DirectX::XMFLOAT3 EyePosW = { 0.0f, 0.0f, 0.0f };
     float PassPad0 = 0.0f;
     DirectX::XMFLOAT4 bgColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+    UINT NumStaticFrame = 1;
+    UINT intPad0 = 0;
+    UINT intPad1 = 0;
+    UINT intPad2 = 0;
 };
 
 struct PassConstants

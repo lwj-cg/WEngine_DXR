@@ -223,7 +223,7 @@ void Camera::RotateY(float angle)
 	mViewDirty = true;
 }
 
-void Camera::UpdateViewMatrix()
+void Camera::UpdateViewMatrix(UINT& numStaticFrames)
 {
 	if(mViewDirty)
 	{
@@ -269,6 +269,7 @@ void Camera::UpdateViewMatrix()
 		mView(3, 3) = 1.0f;
 
 		mViewDirty = false;
+		numStaticFrames = 0;
 	}
 }
 

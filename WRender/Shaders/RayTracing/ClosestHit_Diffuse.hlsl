@@ -28,7 +28,7 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
     
-    float3 geometric_normal = normalize(cross(v2 - v0, v1 - v0));
+    float3 geometric_normal = normalize(cross(v1 - v0, v2 - v0));
     float4x4 objectToWorld = objectData.ObjectToWorld;
     float3 world_geometric_normal = mul(geometric_normal, (float3x3) objectToWorld);
     world_geometric_normal = normalize(world_geometric_normal);
@@ -45,11 +45,20 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
     Onb onb;
     create_onb(ffnormal, onb);
     inverse_transform_with_onb(p, onb);
+    //if (InstanceID() == 2)
+    //    p = reflect(ray_direction, ffnormal);
     current_payload.direction = p;
     
     uint matIdx = objectData.MatIdx;
     MaterialData matData = gMaterialBuffer[matIdx];
     float3 diffuse_color = matData.Albedo.rgb;
+    
+    if (any(matData.Emission))
+    {
+        current_payload.done = true;
+        current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
+        return;
+    }
     
     // NOTE: f/pdf = 1 since we are perfectly importance sampling lambertian
     // with cosine density.
@@ -80,28 +89,23 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
         if (nDl > 0.0f && LnDl > 0.0f)
         {
             RayPayload_shadow shadow_payload;
-            shadow_payload.inShadow = true;
+            // ?
+            shadow_payload.inShadow = 0;
             // Note: bias both ends of the shadow ray, in case the light is also present as geometry in the scene.
             RayDesc shadow_ray = make_Ray(hitpoint, L, scene_epsilon, Ldist - scene_epsilon);
-            // Trace the ray (Hit group 1 : shadow ray, Miss 1 : shadow miss)
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
+            // Trace the ray (Hit group 2 : shadow ray, Miss 1 : shadow miss)
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
 
-            if (!shadow_payload.inShadow)
+            if (shadow_payload.inShadow != 0)
             {
                 const float A = length(cross(light.v1, light.v2));
                 // convert area based pdf to solid angle
                 const float weight = nDl * LnDl * A / (M_PI * Ldist * Ldist);
-                result += light.emission * weight;
+                result += light.emission * weight * shadow_payload.inShadow;
             }
         }
     }
     
-    //result += matData.Emission;
-
     current_payload.radiance = result;
     
-    //if (num_lights > 0)
-    //    current_payload.radiance = float3(0.3, 0.3, 0.3);
-    //else 
-    //    current_payload.radiance = float3(1, 1, 1);
 }

@@ -14,6 +14,10 @@ cbuffer cbPass : register(b0)
     float3 gEyePosW;
     float PassPad0;
     float4 gBackColor;
+    uint gNumStaticFrame;
+    uint intPad0;
+    uint intPad1;
+    uint intPad2;
 };
 
 StructuredBuffer<ObjectConstants> gObjectBuffer : register(t0, space1);
@@ -29,7 +33,7 @@ RaytracingAccelerationStructure SceneBVH : register(t0);
 void RayGen()
 {
 	// Global variables
-    int gSqrtSamples = 4;
+    int gSqrtSamples = 2;
     int gMaxDepth = 8;
     int rr_begin_depth = 1;
 
@@ -43,7 +47,7 @@ void RayGen()
     uint pixel_id = (launchIndex.y * dims.x + launchIndex.x) * (samples_per_pixel + 1);
     float2 pixel = launchIndex * inv_screen - 1.0f;
     float3 color_result = float3(0.0f, 0.0f, 0.0f);
-    uint camera_static_frames = 1;
+    uint camera_static_frames = gNumStaticFrame;
     uint seed = tea16(pixel_id, camera_static_frames);
     //float z = rnd(seed);
     for (uint samples_index = 0; samples_index < samples_per_pixel; ++samples_index)
@@ -66,6 +70,7 @@ void RayGen()
         payload.depth = 0;
         payload.seed = seed;
         payload.done = false;
+        payload.countEmitted = true;
 
 		// Trace the ray (Hit group 1 : only diffuse)
 		// Each iteration is a segment of the ray path.  The closest hit will
@@ -75,7 +80,7 @@ void RayGen()
         //for (;;)
         {
             RayDesc ray = make_Ray(origin, direction);
-            // Trace the ray (Hit group 0 : diffuse, Miss 0 : common miss)
+            // Trace the ray (Hit group 0 : default, Miss 0 : common miss)
             TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
             if (payload.done)
@@ -96,6 +101,7 @@ void RayGen()
 
             payload.depth++;
             radiance += payload.radiance * payload.attenuation;
+            payload.countEmitted = false;
 
             // Update ray data for the next path segment
             origin = payload.origin;
@@ -109,5 +115,14 @@ void RayGen()
     color_result /= samples_per_pixel;
     color_result = pow(saturate(color_result), 1 / 2.2f);
     uint2 outputIndex = uint2(launchIndex.x, DispatchRaysDimensions().y - launchIndex.y - 1);
-    gOutput[outputIndex] = float4(color_result, 1.f);
+    if (camera_static_frames>1)
+    {
+        float a = 1.0f / (float) camera_static_frames;
+        float3 old_color = gOutput[outputIndex].xyz;
+        gOutput[outputIndex] = float4(lerp(old_color, color_result, a), 1.0f);
+    }
+    else
+    {
+        gOutput[outputIndex] = float4(color_result, 1.f);
+    }
 }

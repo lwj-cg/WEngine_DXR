@@ -137,7 +137,7 @@ inline float3 FresnelLerp(const float3 F0, const float3 F90, const float cosA)
 
 float3 BRDF(const float3 diffColor, const float3 specColor, const float smoothness,
 	float3 normal, const float3 viewDir, const float3 lightDir,
-	const float3 lightSatu, const uint type)
+	const uint type)
 {
 	float perceptualRoughness = SmoothnessToPerceptualRoughness(smoothness);
 	float3 halfVec = normalize(lightDir + viewDir);
@@ -168,14 +168,14 @@ float3 BRDF(const float3 diffColor, const float3 specColor, const float smoothne
 	specularTerm *= any(specColor) ? 1.0f : 0.0f;
 	
 	// diffuse
-	if (type == 0) return diffuseTerm * lightSatu * diffColor;
+	if (type == 0) return diffuseTerm * diffColor;
 	// specular
-	else if (type == 1) return specularTerm * lightSatu * FresnelTerm(specColor, lh);
+	else if (type == 1) return specularTerm * FresnelTerm(specColor, lh);
 	// mixture
-	else return diffuseTerm * nl * lightSatu * diffColor + specularTerm * lightSatu * FresnelTerm(specColor, lh);
+	else return diffuseTerm * nl * diffColor + specularTerm * FresnelTerm(specColor, lh);
 }
 
-float3 PBR(const MaterialData matData, const float3 lightDir, const float3 lightSatu,
+float3 PBR(const MaterialData matData, const float3 lightDir,
 	const float3 normal, const float3 viewDir, const uint type)
 {
 	float4 diffuseAlbedo = matData.Albedo;
@@ -186,15 +186,15 @@ float3 PBR(const MaterialData matData, const float3 lightDir, const float3 light
 	//// Dynamically look up the texture in the array.
 	//diffuseAlbedo *= gDiffuseMap[diffuseTexIndex].Sample(gsamAnisotropicWrap, TexC);
 
-	float3 color;
+	float3 factor;
 
 	float oneMinusReflectivity;
 	float3 baseColor, specColor;
 	baseColor = DiffuseAndSpecularFromMetallic(diffuseAlbedo.rgb, metallic, /*ref*/specColor, /*ref*/oneMinusReflectivity);
 
-	color = BRDF(baseColor, specColor, smoothness, normal, viewDir, lightDir, lightSatu, type);
+	factor = BRDF(baseColor, specColor, smoothness, normal, viewDir, lightDir, type);
 
-	return color;
+	return factor;
 }
 
 inline void uniform_sample_hemisphere(const float x, const float y, out float3 p)

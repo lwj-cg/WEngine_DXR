@@ -23,6 +23,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 		for (tinyxml2::XMLNode* node = entry->FirstChildElement(); node; node = node->NextSibling())
 		{
 			tinyxml2::XMLElement* e = node->ToElement();
+			if (!e) continue;
 			std::string nodeType(e->Value());
 			if (nodeType == "object")
 			{
@@ -156,6 +157,8 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							auto& transformF4x4 = MathHelper::Identity4x4();
 							auto& transformMatrix = DirectX::XMLoadFloat4x4(&transformF4x4);
 							tinyxml2::XMLElement* translationElem = transformElem->FirstChildElement("translation");
+							tinyxml2::XMLElement* rotationElem = transformElem->FirstChildElement("rotation");
+							tinyxml2::XMLElement* scalingElem = transformElem->FirstChildElement("scale");
 							if (translationElem)
 							{
 								auto& transFloat3 = parseFloat3(translationElem->GetText());
@@ -163,7 +166,6 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 								auto& T = DirectX::XMMatrixTranslationFromVector(transVector);
 								transformMatrix = DirectX::XMMatrixMultiply(T, transformMatrix);
 							}
-							tinyxml2::XMLElement* rotationElem = transformElem->FirstChildElement("rotation");
 							if (rotationElem)
 							{
 								using DirectX::XM_PI;
@@ -175,7 +177,6 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 								auto& Rz = DirectX::XMMatrixRotationZ(rotFloat3.z * XM_PI / 180.0f);
 								transformMatrix = DirectX::XMMatrixMultiply(Rz, transformMatrix);
 							}
-							tinyxml2::XMLElement* scalingElem = transformElem->FirstChildElement("scale");
 							if (scalingElem)
 							{
 								auto& scaleFloat3 = parseFloat3(scalingElem->GetText());

@@ -202,6 +202,7 @@ private:
 	ComPtr<ID3D12RootSignature> CreateRayGenSignature();
 	ComPtr<ID3D12RootSignature> CreateMissSignature();
 	ComPtr<ID3D12RootSignature> CreateHitSignature();
+	ComPtr<ID3D12RootSignature> CreateHitShadowSignature();
 	ComPtr<ID3D12RootSignature> CreateEmptySignature();
 
 	void CreateRayTracingPipeline();
@@ -269,6 +270,9 @@ private:
 	// Light Buffer
 	ComPtr<ID3D12Resource> mLightBuffer = nullptr;
 	ComPtr<ID3D12Resource> mLightBufferUploader = nullptr;
+
+	// num static frame
+	UINT mNumStaticFrame = 0;
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
@@ -660,7 +664,7 @@ void MainApp::OnKeyboardInput(const GameTimer& gt)
 	if (GetAsyncKeyState('D') & 0x8000)
 		mCamera.Strafe(10.0f * dt);
 
-	mCamera.UpdateViewMatrix();
+	mCamera.UpdateViewMatrix(mNumStaticFrame);
 }
 
 void MainApp::AnimateMaterials(const GameTimer& gt)
@@ -678,6 +682,8 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 
 void MainApp::UpdateMainPassCB(const GameTimer& gt)
 {
+	++mNumStaticFrame %= 10000;
+
 	XMMATRIX view = mCamera.GetView();
 	XMMATRIX proj = mCamera.GetProj();
 
@@ -693,6 +699,7 @@ void MainApp::UpdateMainPassCB(const GameTimer& gt)
 	XMStoreFloat4x4(&mPassCB.ViewProj, XMMatrixTranspose(viewProj));
 	XMStoreFloat4x4(&mPassCB.InvViewProj, XMMatrixTranspose(invViewProj));
 	mPassCB.EyePosW = mCamera.GetPosition3f();
+	mPassCB.NumStaticFrame = mNumStaticFrame;
 
 	auto currPassCB = mCurrFrameResource->PassCB.get();
 	currPassCB->CopyData(0, mPassCB);
@@ -1114,6 +1121,14 @@ ComPtr<ID3D12RootSignature> MainApp::CreateHitSignature() {
 	return rsc.Generate(md3dDevice.Get(), true);
 }
 
+ComPtr<ID3D12RootSignature> MainApp::CreateHitShadowSignature()
+{
+	nv_helpers_dx12::RootSignatureGenerator rsc;
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 0);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 1);
+	return rsc.Generate(md3dDevice.Get(), true);
+}
+
 ComPtr<ID3D12RootSignature> MainApp::CreateEmptySignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
@@ -1147,7 +1162,7 @@ void MainApp::CreateRayTracingPipeline()
 	// used.
 	m_rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\RayGen.hlsl");
 	m_missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Miss.hlsl");
-	//m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
+	m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
 	m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
 	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\AnyHit_Shadow.hlsl");
 
@@ -1159,15 +1174,15 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_rayGenLibrary.Get(), { L"RayGen" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss_Shadow" });
-	//pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit" });
+	pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit_Default" });
 	pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
 	// parameters and buffers will be accessed.
 	m_rayGenSignature = CreateRayGenSignature();
-	//m_hitSignature = CreateHitSignature();
+	m_hitSignature = CreateHitSignature();
 	m_hitDiffuseSignature = CreateHitSignature();
-	m_hitShadowSignature = CreateEmptySignature();
+	m_hitShadowSignature = CreateHitShadowSignature();
 	m_missSignature = CreateMissSignature();
 	m_missShadowSignature = CreateEmptySignature();
 	
@@ -1179,7 +1194,7 @@ void MainApp::CreateRayTracingPipeline()
 	// discard some intersections. Finally, the closest-hit program is invoked on
 	// the intersection point closest to the ray origin. Those 3 shaders are bound
 	// together into a hit group.
-	//pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
+	pipeline.AddHitGroup(L"HitGroup_Default", L"ClosestHit_Default");
 	pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"", L"AnyHit_Shadow");
 
@@ -1189,7 +1204,7 @@ void MainApp::CreateRayTracingPipeline()
 	// to as hit groups, meaning that the underlying intersection, any-hit and
 	// closest-hit shaders share the same root signature.
 	pipeline.AddRootSignatureAssociation(m_rayGenSignature.Get(), { L"RayGen" });
-	//pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_Default" });
 	pipeline.AddRootSignatureAssociation(m_hitDiffuseSignature.Get(), { L"HitGroup_Diffuse" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
@@ -1200,7 +1215,7 @@ void MainApp::CreateRayTracingPipeline()
 	// exchanged between shaders, such as the HitInfo structure in the HLSL code.
 	// It is important to keep this value as low as possible as a too high value
 	// would result in unnecessary memory consumption and cache trashing.
-	pipeline.SetMaxPayloadSize(15 * sizeof(float));
+	pipeline.SetMaxPayloadSize(16 * sizeof(float));
 
 	// Upon hitting a surface, DXR can provide several attributes to the hit. In
 	// our sample we just use the barycentric coordinates defined by the weights
@@ -1335,7 +1350,7 @@ void MainApp::CreateShaderBindingTable() {
 	m_sbtHelper.AddMissProgram(L"Miss_Shadow", {});
 
 	// Adding the triangle hit shader
-	/*m_sbtHelper.AddHitGroup(L"HitGroup",
+	m_sbtHelper.AddHitGroup(L"HitGroup_Default",
 		{
 			objectCBPointer,
 			materialBufferPointer,
@@ -1343,7 +1358,7 @@ void MainApp::CreateShaderBindingTable() {
 			indexBufferPointer,
 			lightBufferPointer,
 			heapPointer
-		});*/
+		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Diffuse",
 		{
 			objectCBPointer,
@@ -1353,7 +1368,11 @@ void MainApp::CreateShaderBindingTable() {
 			lightBufferPointer,
 			heapPointer
 		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",{});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectCBPointer,
+			materialBufferPointer
+		});
 
 	// Compute the size of the SBT given the number of shaders and their
   // parameters
@@ -1458,7 +1477,8 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	for (const auto& r : mRenderItems)
 	{
 		objectDataArray.emplace_back(
-			r.transform, r.matIdx,
+			DirectX::XMMatrixTranspose(r.transform), r.matIdx,
+			//r.transform, r.matIdx,
 			(UINT)(r.vertexOffsetInBytes / (sizeof(SVertex))),
 			(UINT)(r.indexOffsetInBytes / sizeof(UINT))
 		);

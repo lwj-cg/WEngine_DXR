@@ -14,11 +14,12 @@ struct RayPayload
 	uint seed;
 	uint depth;
     bool done;
+    bool countEmitted;
 };
 
 struct RayPayload_shadow
 {
-    bool inShadow;
+    float inShadow;
 };
 
 // Attributes output by the raytracing when hitting a surface,

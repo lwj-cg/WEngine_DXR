@@ -15,5 +15,5 @@ void Miss(inout RayPayload payload)
 [shader("miss")]
 void Miss_Shadow(inout RayPayload_shadow payload)
 {
-    payload.inShadow = false;
+    payload.inShadow = 1;
 }

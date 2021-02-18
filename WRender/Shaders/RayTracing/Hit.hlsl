@@ -13,12 +13,14 @@ StructuredBuffer<int> gIndexBuffer : register(t0, space4);
 StructuredBuffer<ParallelogramLight> gLightBuffer : register(t0, space5);
 
 [shader("closesthit")]
-void ClosestHit(inout RayPayload current_payload, Attributes attrib)
+void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
 {
     // Some global configurations
     uint max_depth = 8;
     uint camera_static_frames = 1;
     float refraction_index = 1.5f;
+    float scene_epsilon = 0.001f;
+    uint gNumLights = 1;
     
     ObjectConstants objectData = gObjectBuffer[InstanceID()];
     uint vertId = 3 * PrimitiveIndex() + objectData.IndexOffset;
@@ -26,7 +28,7 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
     float3 v0 = gVertexBuffer[vertOffset + gIndexBuffer[vertId]].pos;
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
-    float3 geometric_normal = normalize(cross(v2 - v0, v1 - v0));
+    float3 geometric_normal = normalize(cross(v1 - v0, v2 - v0));
     float4x4 objectToWorld = objectData.ObjectToWorld;
     float3 world_geometric_normal = mul(geometric_normal, (float3x3) objectToWorld);
     world_geometric_normal = normalize(world_geometric_normal);
@@ -34,13 +36,19 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
     float3 ffnormal = faceforward(world_geometric_normal, -ray_direction);
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
-    current_payload.seed = tea16(current_payload.seed, camera_static_frames);
     float z1 = rnd(current_payload.seed);
-    current_payload.seed = tea16(current_payload.seed, camera_static_frames);
     float z2 = rnd(current_payload.seed);
     
+    // Fetch Material Data
     uint matIdx = objectData.MatIdx;
     MaterialData matData = gMaterialBuffer[matIdx];
+    
+    if (any(matData.Emission))
+    {
+        current_payload.done = true;
+        current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
+        return;
+    }
     
     float3 baseColor;
     int in_to_out = dot(ray_direction, world_geometric_normal) > 0;
@@ -51,6 +59,7 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
     b = current_payload.depth + 1;
     float cut_off = 1 / b;
     
+    current_payload.origin = hitpoint;
     if (current_payload.depth < max_depth)
     {
         if (z2 < cut_off)
@@ -58,13 +67,6 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
             Onb onb;
             create_onb(ffnormal, onb);
             
-            float3 p;
-            RayPayload payload;
-            RayDesc next_ray;
-            payload.depth = current_payload.depth + 1;
-            payload.seed = current_payload.seed;
-            payload.radiance = float3(0, 0, 0);
-
             float max_diffuse = max(max(baseColor.x, baseColor.y), baseColor.z);
 
             float transparent = matData.Transparent;
@@ -76,6 +78,7 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
             float sum_w = refr_diff_refl.x + refr_diff_refl.y + refr_diff_refl.z;
             refr_diff_refl /= sum_w;
             refr_diff_refl.y += refr_diff_refl.x;
+            float3 p;
 
             if (z1 < refr_diff_refl.x)
             { //透射部分
@@ -86,25 +89,30 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
 
                 if (refract(ray_direction, n, in_to_out ? refraction_index : 1.0f / refraction_index, p))
                 {
-                    next_ray = make_Ray(hitpoint, p);
+                    RayDesc next_ray = make_Ray(hitpoint, p);
 
                     // Cast shadow ray
-                    TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 0, next_ray, payload);
-
-                    current_payload.radiance = payload.radiance * baseColor / max_diffuse;
+                    RayPayload_shadow shadow_payload;
+                    shadow_payload.inShadow = 0;
+                    // Trace the ray (Hit group 2 : shadow ray, Miss 1 : shadow miss)
+                    TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, next_ray, shadow_payload);
+                    // ?
+                    current_payload.radiance = shadow_payload.inShadow * baseColor / max_diffuse;
                 }
+                else
+                {
+                    current_payload.done = true;
+                }
+                current_payload.direction = p;
+
             }
             else if (z1 < refr_diff_refl.y)
             { //漫射部分
                 uniform_sample_hemisphere(z1, z2, p);
                 inverse_transform_with_onb(p, onb);
-
-                next_ray = make_Ray(hitpoint, p);
-
-                // Trace the ray
-                TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, next_ray, payload);
                 
-                current_payload.radiance = PBR(matData, p, payload.radiance, ffnormal, -ray_direction, 0) / max_diffuse;
+                current_payload.attenuation *= PBR(matData, p, ffnormal, -ray_direction, 0) / max_diffuse;
+                current_payload.direction = p;
             }
             else
             { // 反射部分
@@ -115,75 +123,24 @@ void ClosestHit(inout RayPayload current_payload, Attributes attrib)
                 inverse_transform_with_onb(n, onb);
                 p = reflect(ray_direction, n);
 
+                //if (dot(p, ffnormal) < 0) p = reflect(p, ffnormal);
                 if (dot(p, ffnormal) > 0)
                 {
-                    next_ray = make_Ray(hitpoint, p);
-
-                    // Trace the ray
-                    TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, next_ray, payload);
-
-                    current_payload.radiance = PBR(matData, p, payload.radiance, ffnormal, -ray_direction, 1) / pd / (1 - max_diffuse);
+                    current_payload.attenuation *= PBR(matData, p, ffnormal, -ray_direction, 1) / pd / (1 - max_diffuse);
+                    current_payload.direction = p;
+                }
+                else
+                {
+                    current_payload.done = true;
                 }
             }
-            current_payload.radiance *= sum_w * b;
+            current_payload.attenuation *= sum_w * b;
+            //current_payload.attenuation *= sum_w;
         }
     }
 
-    current_payload.radiance += matData.Emission;
-    //current_payload.radiance = world_geometric_normal;
-}
-
-[shader("closesthit")]
-void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
-{
-    // Some global configurations
-    uint max_depth = 8;
-    uint camera_static_frames = 1;
-    float refraction_index = 1.5f;
-    float scene_epsilon = 0.001f;
-    
-    // Calculate world_geometric_normal
-    ObjectConstants objectData = gObjectBuffer[InstanceID()];
-    uint vertId = 3 * PrimitiveIndex() + objectData.IndexOffset;
-    uint vertOffset = objectData.VertexOffset;
-    float3 v0 = gVertexBuffer[vertOffset + gIndexBuffer[vertId]].pos;
-    float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
-    float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
-    float3 geometric_normal = normalize(cross(v2 - v0, v1 - v0));
-    float4x4 objectToWorld = objectData.ObjectToWorld;
-    float3 world_geometric_normal = mul(geometric_normal, (float3x3) objectToWorld);
-    world_geometric_normal = normalize(world_geometric_normal);
-    float3 ray_direction = normalize(WorldRayDirection());
-    float3 ffnormal = faceforward(world_geometric_normal, -ray_direction);
-    
-    float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
-    current_payload.origin = hitpoint;
-    
-    float z1 = rnd(current_payload.seed);
-    float z2 = rnd(current_payload.seed);
-    float3 p;
-    uniform_sample_hemisphere(z1, z2, p);
-    Onb onb;
-    create_onb(ffnormal, onb);
-    inverse_transform_with_onb(p, onb);
-    current_payload.direction = p;
-    
-    uint matIdx = objectData.MatIdx;
-    MaterialData matData = gMaterialBuffer[matIdx];
-    float3 diffuse_color = matData.Albedo.rgb;
-    
-    // NOTE: f/pdf = 1 since we are perfectly importance sampling lambertian
-    // with cosine density.
-    current_payload.attenuation = current_payload.attenuation * diffuse_color;
-    
-    //
-    // Next event estimation (compute direct lighting).
-    //
-    uint num_lights, stride;
-    gLightBuffer.GetDimensions(num_lights, stride);
     float3 result = float3(0.0f, 0.0f, 0.0f);
-
-    for (int i = 0; i < num_lights; ++i)
+    for (int i = 0; i < gNumLights; ++i)
     {
         // Choose random point on light
         ParallelogramLight light = gLightBuffer[i];
@@ -195,30 +152,35 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
         const float Ldist = length(light_pos - hitpoint);
         const float3 L = normalize(light_pos - hitpoint);
         const float nDl = dot(ffnormal, L);
-        const float LnDl = dot(light.normal, L);
+        const float LnDl = -dot(light.normal, L);
 
         // cast shadow ray
-        //if (nDl > 0.0f && LnDl > 0.0f)
-        if (nDl > 0.0f)
+        //if (nDl > 0.0f)
+        if (nDl > 0.0f && LnDl > 0.0f)
         {
             RayPayload_shadow shadow_payload;
-            shadow_payload.inShadow = false;
+            // ?
+            shadow_payload.inShadow = 0;
             // Note: bias both ends of the shadow ray, in case the light is also present as geometry in the scene.
-            RayDesc shadow_ray = make_Ray_Minmax(hitpoint, L, scene_epsilon, Ldist - scene_epsilon);
+            RayDesc shadow_ray = make_Ray(hitpoint, L, scene_epsilon, Ldist - scene_epsilon);
             // Trace the ray (Hit group 2 : shadow ray, Miss 1 : shadow miss)
             TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
 
-            if (!shadow_payload.inShadow)
+            if (shadow_payload.inShadow != 0)
             {
                 const float A = length(cross(light.v1, light.v2));
                 // convert area based pdf to solid angle
                 const float weight = nDl * LnDl * A / (M_PI * Ldist * Ldist);
-                result += light.emission * weight;
+                result += light.emission * weight * shadow_payload.inShadow;
+                float3 light_satu = light.emission * weight * shadow_payload.inShadow;
+                result += PBR(matData, L, light_satu, -ray_direction, 2);
+                
             }
         }
     }
-
     current_payload.radiance = result;
-    //current_payload.radiance = float3(0,1,0);
+    
+    //current_payload.radiance = ffnormal;
 }
+
 
