@@ -140,7 +140,7 @@ private:
 	ComPtr<ID3D12DescriptorHeap> mCbvSrvUavDescriptorHeap = nullptr;
 
 	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
-	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
+	//std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
 	std::unordered_map<std::string, std::unique_ptr<Texture>> mTextures;
 	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
 	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
@@ -229,7 +229,7 @@ private:
 	// #DXR
 	void CreateRaytracingOutputBuffer();
 	void CreateShaderResourceHeap();
-	ComPtr<ID3D12Resource> m_outputResource;
+	ComPtr<ID3D12Resource> m_outputResource = nullptr;
 	ComPtr<ID3D12DescriptorHeap> m_srvUavHeap;
 
 	// #DXR
@@ -245,7 +245,8 @@ private:
 	// My SceneDescParser
 	WSceneDescParser mSceneDescParser;
 	std::map<std::string, WGeometryRecord> mGeometryMap;
-	std::vector<WRenderItem> mRenderItems;
+	std::map<std::string, WRenderItem> mRenderItems;
+	std::map<std::string, WMaterial> mMaterials;
 	void SetupSceneWithXML(const char* filename);
 	void SetupCamera(const WCamereConfig& cameraConfig);
 
@@ -256,15 +257,7 @@ private:
 	ComPtr<ID3D12Resource> mIndexBuffer = nullptr;
 	ComPtr<ID3D12Resource> mIndexBufferUploader = nullptr;
 
-	// Material Buffer
-	ComPtr<ID3D12Resource> mMaterialBuffer = nullptr;
-	ComPtr<ID3D12Resource> mMaterialBufferUploader = nullptr;
-
-	// Per Object Buffer Array
-	ComPtr<ID3D12Resource> mObjectBufferArray = nullptr;
-	ComPtr<ID3D12Resource> mObjectBufferArrayUploader = nullptr;
-
-	// Per Pass Data
+	// Frame resource on CPU
 	WPassConstants mPassCB;
 
 	// Light Buffer
@@ -338,11 +331,11 @@ bool MainApp::Initialize()
 	BuildShaders();
 	BuildShapeGeometry();
 	BuildGeometryMaterials();
-	BuildFrameResources();
 	BuildPSOs();
 
 	// Setup scene with XML description file
 	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
+	BuildFrameResources();
 
 	// Execute the initialization commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -392,6 +385,14 @@ void MainApp::OnResize()
 	{
 		mPathTracer->OnResize(mClientWidth, mClientHeight);
 	}
+
+	//if (m_outputResource)
+	//{
+	//	// Resize the output buffer
+	//	CreateRaytracingOutputBuffer();
+	//	CreateShaderResourceHeap();
+	//}
+	
 }
 
 void MainApp::Update(const GameTimer& gt)
@@ -468,6 +469,8 @@ void MainApp::DrawForRasterize(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials);
+
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
 
@@ -507,6 +510,9 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	// Clear the back buffer and depth buffer.
 	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.clearColor, 0, nullptr);
 	mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+	// ???Specify the buffers we are going to render to.
+	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
 	// #DXR
 	// Bind the descriptor heap giving access to the top-level acceleration
@@ -583,6 +589,8 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	// Transition to PRESENT state.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials);
 
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -674,10 +682,53 @@ void MainApp::AnimateMaterials(const GameTimer& gt)
 
 void MainApp::UpdateObjectCBs(const GameTimer& gt)
 {
+	auto currObjectBuffer = mCurrFrameResource->ObjectBuffer.get();
+	for (auto& ritem : mRenderItems)
+	{
+		auto& r = ritem.second;
+		// Only update the buffer data if the constants have changed.  
+		// This needs to be tracked per frame resource.
+		if (r.NumFramesDirty > 0)
+		{
+			WObjectConstants objConstants(
+				DirectX::XMMatrixTranspose(r.transform), r.matIdx,
+				(UINT)(r.vertexOffsetInBytes / (sizeof(SVertex))),
+				(UINT)(r.indexOffsetInBytes / sizeof(UINT))
+			);
+
+			currObjectBuffer->CopyData(r.objIdx, objConstants);
+
+			// Next FrameResource need to be updated too.
+			--r.NumFramesDirty;
+			mNumStaticFrame = 0;
+		}
+	}
 }
 
 void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 {
+	auto currMaterialBuffer = mCurrFrameResource->MaterialBuffer.get();
+	for (auto& mitem : mMaterials)
+	{
+		auto& m = mitem.second;
+		/*m.Albedo.y -= 0.01;
+		m.Albedo.y = max(m.Albedo.y, 0);
+		m.NumFramesDirty = gNumFrameResources;*/
+		// Only update the cbuffer data if the constants have changed.  
+		// This needs to be tracked per frame resource.
+		if (m.NumFramesDirty > 0)
+		{
+			WMaterialData materialData(
+				m.Albedo, m.Emission, m.Transparent, m.Smoothness, m.Metallic
+			);
+
+			currMaterialBuffer->CopyData(m.MatIdx, materialData);
+
+			// Next FrameResource need to be updated too.
+			--m.NumFramesDirty;
+			mNumStaticFrame = 0;
+		}
+	}
 }
 
 void MainApp::UpdateMainPassCB(const GameTimer& gt)
@@ -836,7 +887,7 @@ void MainApp::BuildFrameResources()
 	for (int i = 0; i < gNumFrameResources; ++i)
 	{
 		mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-			1, (UINT)mAllRitems.size(), (UINT)mMaterials.size()));
+			1, (UINT)mRenderItems.size(), (UINT)mMaterials.size()));
 	}
 }
 
@@ -938,11 +989,12 @@ void MainApp::CreateAccelerationStructures() {
 
 	// Build all the Instances from the RenderItems
 	mInstances.resize(mRenderItems.size());
-	for (size_t i = 0; i < mRenderItems.size(); i++)
+	size_t i = 0;
+	for (const auto& ritem : mRenderItems)
 	{
-		const auto& r = mRenderItems[i];
+		const auto& r = ritem.second;
 		auto& bottomLevelBufferPointer = bottomLevelBuffers[r.geometryName].pResult;
-		mInstances[i] = { bottomLevelBufferPointer, r.transform };
+		mInstances[r.objIdx] = { bottomLevelBufferPointer, r.transform };
 	}
 	// Create Top Level Acceleration Structure
 	CreateTopLevelAS(mInstances);
@@ -1328,10 +1380,14 @@ void MainApp::CreateShaderBindingTable() {
 	// struct is a UINT64, which then has to be reinterpreted as a pointer.
 	auto heapPointer = reinterpret_cast<UINT64*>(srvUavHeapHandle.ptr);
 
-	auto currentPassCB = mFrameResources[0]->PassCB.get();
+	auto currentPassCB = mFrameResources[mCurrFrameResourceIndex]->PassCB.get();
 	auto passCBPointer = reinterpret_cast<UINT64*>(currentPassCB->Resource()->GetGPUVirtualAddress());
-	auto objectCBPointer = reinterpret_cast<UINT64*>(mObjectBufferArray->GetGPUVirtualAddress());
-	auto materialBufferPointer = reinterpret_cast<UINT64*>(mMaterialBuffer->GetGPUVirtualAddress());
+	auto currentObjectBuffer = mFrameResources[mCurrFrameResourceIndex]->ObjectBuffer.get();
+	auto objectBufferPointer = reinterpret_cast<UINT64*>(currentObjectBuffer->Resource()->GetGPUVirtualAddress());
+	auto currentMaterialBuffer = mFrameResources[mCurrFrameResourceIndex]->MaterialBuffer.get();
+	auto materialBufferPointer = reinterpret_cast<UINT64*>(currentMaterialBuffer->Resource()->GetGPUVirtualAddress());
+	/*auto objectBufferPointer = reinterpret_cast<UINT64*>(mObjectBufferArray->GetGPUVirtualAddress());
+	auto materialBufferPointer = reinterpret_cast<UINT64*>(mMaterialBuffer->GetGPUVirtualAddress());*/
 	auto vertexBufferPointer = reinterpret_cast<UINT64*>(mVertexBuffer->GetGPUVirtualAddress());
 	auto indexBufferPointer = reinterpret_cast<UINT64*>(mIndexBuffer->GetGPUVirtualAddress());
 	auto lightBufferPointer = reinterpret_cast<UINT64*>(mLightBuffer->GetGPUVirtualAddress());
@@ -1339,7 +1395,7 @@ void MainApp::CreateShaderBindingTable() {
 	m_sbtHelper.AddRayGenerationProgram(L"RayGen",
 		{
 			passCBPointer,
-			objectCBPointer,
+			objectBufferPointer,
 			materialBufferPointer,
 			heapPointer
 		});
@@ -1352,7 +1408,7 @@ void MainApp::CreateShaderBindingTable() {
 	// Adding the triangle hit shader
 	m_sbtHelper.AddHitGroup(L"HitGroup_Default",
 		{
-			objectCBPointer,
+			objectBufferPointer,
 			materialBufferPointer,
 			vertexBufferPointer,
 			indexBufferPointer,
@@ -1361,7 +1417,7 @@ void MainApp::CreateShaderBindingTable() {
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Diffuse",
 		{
-			objectCBPointer,
+			objectBufferPointer,
 			materialBufferPointer,
 			vertexBufferPointer,
 			indexBufferPointer,
@@ -1370,7 +1426,7 @@ void MainApp::CreateShaderBindingTable() {
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
 		{
-			objectCBPointer,
+			objectBufferPointer,
 			materialBufferPointer
 		});
 
@@ -1436,7 +1492,7 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	mSceneDescParser.Parse(filename);
 	mGeometryMap = mSceneDescParser.getGeometryMap();
 	mRenderItems = mSceneDescParser.getRenderItems();
-	const auto& materialBuffer = mSceneDescParser.getMaterialBuffer();
+	mMaterials = mSceneDescParser.getMaterialItems();
 	const auto& vertexBuffer = mSceneDescParser.getVertexBuffer();
 	const auto& indexBuffer = mSceneDescParser.getIndexBuffer();
 	const auto& cameraConfig = mSceneDescParser.getCameraConfig();
@@ -1451,11 +1507,6 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	mIndexBuffer = d3dUtil::CreateDefaultBuffer(
 		md3dDevice.Get(), mCommandList.Get(), indexBuffer.data(),
 		indexBufferSize, mIndexBufferUploader
-	);
-	UINT64 materialBufferSize = materialBuffer.size() * sizeof(WMaterialData);
-	mMaterialBuffer = d3dUtil::CreateDefaultBuffer(
-		md3dDevice.Get(), mCommandList.Get(), materialBuffer.data(),
-		materialBufferSize, mMaterialBufferUploader
 	);
 	UINT64 lightBufferSize = lights.size() * sizeof(ParallelogramLight);
 	mLightBuffer = d3dUtil::CreateDefaultBuffer(
@@ -1473,21 +1524,6 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	//ComPtr<ID3D11ShaderResourceView> mLightBufferView;
 	//ThrowIfFailed(md3dDevice->CreateShaderResourceView(mLightBuffer.Get(), &srvDesc, &(mLightBufferView.Get())));
 
-	std::vector<WObjectConstants> objectDataArray;
-	for (const auto& r : mRenderItems)
-	{
-		objectDataArray.emplace_back(
-			DirectX::XMMatrixTranspose(r.transform), r.matIdx,
-			//r.transform, r.matIdx,
-			(UINT)(r.vertexOffsetInBytes / (sizeof(SVertex))),
-			(UINT)(r.indexOffsetInBytes / sizeof(UINT))
-		);
-	}
-	UINT64 objectBufferSize = objectDataArray.size() * sizeof(WObjectConstants);
-	mObjectBufferArray = d3dUtil::CreateDefaultBuffer(
-		md3dDevice.Get(), mCommandList.Get(), objectDataArray.data(),
-		objectBufferSize, mObjectBufferArrayUploader
-	);
 	// Setup the camera based on configs in XML
 	SetupCamera(cameraConfig);
 }

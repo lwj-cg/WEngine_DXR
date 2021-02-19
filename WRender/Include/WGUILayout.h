@@ -9,6 +9,9 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
 #include "../../Common/d3dUtil.h"
+#include "../FrameResource.h"
+
+extern const int gNumFrameResources;
 
 inline static DirectX::XMFLOAT3 fpToXMFLOAT3(float fp[3])
 {
@@ -20,17 +23,28 @@ inline static DirectX::XMFLOAT4 fpToXMFLOAT4(float fp[3])
 	return XMFLOAT4(fp);
 }
 
-class WGUILayout 
+inline static void setFrameDirty(int& numFrameDirty, int numFrameResources)
+{
+	numFrameDirty = numFrameResources;
+}
+
+class WGUILayout
 {
 public:
-	typedef std::unordered_map<std::string, std::unique_ptr<Material>> MaterialTable;
+	typedef WPassConstants PassData;
+	typedef std::map<std::string, WRenderItem> RenderItemList;
+	typedef std::map<std::string, WMaterial> MaterialList;
 	WGUILayout() = default;
 	static void HelpMarker(const char* desc);
-	static void ShowAppPropertyEditor(bool* p_open, MaterialTable& materials);
+	static void ShowAppPropertyEditor(bool* p_open, MaterialList& materials);
+	static void ShowObjectInspector(bool* p_open, std::string objName, RenderItemList& renderItems, MaterialList& materials);
 	static void ShowPlaceholderObject(const char* prefix, int uid,
-		MaterialTable& materials, const char* material_name);
-	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
-		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, MaterialTable& materials);
+		MaterialList& materials, const char* material_name);
+	static void DrawGUILayout(
+		const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
+		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
+		PassData& passData, RenderItemList& renderItems, MaterialList& materials
+	);
 };
 
 // Helper to display a little (?) mark which shows a tooltip when hovered.
@@ -49,10 +63,10 @@ void WGUILayout::HelpMarker(const char* desc)
 }
 
 // Demonstrate create a simple property editor.
-void WGUILayout::ShowAppPropertyEditor(bool* p_open, MaterialTable& materials)
+void WGUILayout::ShowAppPropertyEditor(bool* p_open, MaterialList& materials)
 {
-	ImGui::SetNextWindowSize(ImVec2(430, 450), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("Material editor", p_open))
+	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Material modifier", p_open))
 	{
 		ImGui::End();
 		return;
@@ -68,12 +82,52 @@ void WGUILayout::ShowAppPropertyEditor(bool* p_open, MaterialTable& materials)
 	ImGui::End();
 }
 
+// Create a simple object inspector
+void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
+	RenderItemList& renderItems, MaterialList& materials)
+{
+	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Object Inspector", p_open))
+	{
+		ImGui::End();
+		return;
+	}
+
+	auto& r = renderItems.at(objName);
+	ImGui::Text("Object Name: %s", objName.c_str());
+	ImGui::Separator();
+
+	// Object's transform property
+	ImGui::Text("Transform");
+	if (ImGui::DragFloat3("Translation##value", &r.translation.x, 0.01f, 0, 1))
+		r.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat3("Rotation##value", &r.rotation.x, 0.01f, 0, 1))
+		r.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat3("Scaling##value", &r.scaling.x, 0.01f, 0, 1))
+		r.NumFramesDirty = gNumFrameResources;
+	ImGui::Separator();
+
+	// Object's material property
+	ImGui::Text("Material: %s", r.materialName.c_str());
+	auto& m = materials.at(r.materialName);
+	if (ImGui::ColorEdit4("Albedo##value", &m.Albedo.x))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat("Metallic##value", &m.Metallic, 0.01f, 0, 1))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
+		m.NumFramesDirty = gNumFrameResources;
+
+	ImGui::End();
+}
+
 //-----------------------------------------------------------------------------
 // [SECTION] Example App: Property Editor / ShowExampleAppPropertyEditor()
 //-----------------------------------------------------------------------------
 
 void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
-	MaterialTable& materials, const char* material_name)
+	MaterialList& materials, const char* material_name)
 {
 	// Use object uid as identifier. Most commonly you could also use the object pointer as a base ID.
 	ImGui::PushID(uid);
@@ -81,7 +135,7 @@ void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
 	// Text and Tree nodes are less high than framed widgets, using AlignTextToFramePadding() we add vertical spacing to make the tree lines equal high.
 	ImGui::AlignTextToFramePadding();
 	bool node_open = ImGui::TreeNode("Material", "%s", prefix, uid);
-	Material* mat = materials[std::string(material_name)].get();
+	auto mat = materials[std::string(material_name)];
 
 	if (node_open)
 	{
@@ -92,21 +146,16 @@ void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
 		static bool options_menu = true;
 		static bool hdr = false;
 		ImGuiColorEditFlags misc_flags = (hdr ? ImGuiColorEditFlags_HDR : 0) | (drag_and_drop ? 0 : ImGuiColorEditFlags_NoDragDrop) | (alpha_half_preview ? ImGuiColorEditFlags_AlphaPreviewHalf : (alpha_preview ? ImGuiColorEditFlags_AlphaPreview : 0)) | (options_menu ? 0 : ImGuiColorEditFlags_NoOptions);
-		
-		float fpForFresnelR0[3] = {mat->FresnelR0.x, mat->FresnelR0.y, mat->FresnelR0.z};
-		ImGui::DragFloat3("FresnelR0##value", fpForFresnelR0, 0.01f);
-		mat->FresnelR0 = fpToXMFLOAT3(fpForFresnelR0);
 
-		ImGui::DragFloat("Roughness##value", &mat->Roughness, 0.01f);
+		ImGui::DragFloat("Roughness##value", &mat.Smoothness, 0.01f, 0, 1);
 
-		ImGui::DragFloat("Metallic##value", &mat->Metallic, 0.01f);
+		ImGui::DragFloat("Metallic##value", &mat.Metallic, 0.01f, 0, 1);
 
-		float fpForAlbedo[4] = { mat->DiffuseAlbedo.x, mat->DiffuseAlbedo.y, mat->DiffuseAlbedo.z, mat->DiffuseAlbedo.z };
+		float fpForAlbedo[4] = { mat.Albedo.x, mat.Albedo.y, mat.Albedo.z, mat.Albedo.w };
 		ImGui::ColorEdit4("DiffuseAlbedo##2f", fpForAlbedo, ImGuiColorEditFlags_Float | misc_flags);
-		mat->DiffuseAlbedo = fpToXMFLOAT4(fpForAlbedo);
-	
+		mat.Albedo = fpToXMFLOAT4(fpForAlbedo);
 
-		mat->NumFramesDirty = 3;
+		mat.NumFramesDirty = gNumFrameResources;
 
 		ImGui::TreePop();
 	}
@@ -114,15 +163,24 @@ void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
 }
 
 void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
-	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, MaterialTable& materials)
+	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
+	PassData& passData, RenderItemList& renderItems, MaterialList& materials)
 {
+	// Prepare
+	static std::vector<std::string> OrderedRenderItemList(renderItems.size());
+	for (const auto& ritem : renderItems)
+	{
+		const auto& r = ritem.second;
+		OrderedRenderItemList[r.objIdx] = ritem.first;
+	}
+
 	// Start the Dear ImGui frame
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
 	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-	bool show_demo_window = true;
+	bool show_demo_window = false;
 	if (show_demo_window)
 		ImGui::ShowDemoWindow(&show_demo_window);
 
@@ -132,7 +190,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	// Demonstrate the various window flags. Typically you would just use the default!
 	static bool no_titlebar = false;
 	static bool no_scrollbar = false;
-	static bool no_menu = false;
+	static bool no_menu = true;
 	static bool no_move = false;
 	static bool no_resize = false;
 	static bool no_collapse = false;
@@ -155,11 +213,11 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	// We specify a default position/size in case there's no data in the .ini file.
 	// We only do it to make the demo applications a little more welcoming, but typically this isn't required.
-	ImGui::SetNextWindowPos(ImVec2(650, 20), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(550, 680), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowPos(ImVec2(450, 20), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(350, 680), ImGuiCond_FirstUseEver);
 
 	// Main body of my GUI Layout starts here.
-	if (!ImGui::Begin("WRender", p_open, window_flags))
+	if (!ImGui::Begin("ControlPanel", p_open, window_flags))
 	{
 		// Early out if the window is collapsed, as an optimization.
 		ImGui::End();
@@ -167,21 +225,39 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	}
 
 	static bool show_hierarchy = false;
+	static bool show_inspector = false;
 	static bool show_app_property_editor = false;
 	if (show_hierarchy)     ShowAppPropertyEditor(&show_hierarchy, materials);
+	static int selected = -1;
+	if (show_inspector && selected != -1)
+		ShowObjectInspector(&show_inspector, OrderedRenderItemList[selected], renderItems, materials);
 
 	// e.g. Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
 	ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
 	// Menu Bar
-	if (ImGui::BeginMenuBar())
+	//if (ImGui::BeginMenuBar())
+	//{
+	//	ImGui::EndMenuBar();
+	//}
+
+	ImGui::Text("Scene: CornellBox");
+
+	if (ImGui::CollapsingHeader("Hierarchy"))
 	{
-		if (ImGui::BeginMenu("Resource"))
+		int n = 0;
+		for (const auto& objName : OrderedRenderItemList)
 		{
-			ImGui::MenuItem("Hierarchy", NULL, &show_hierarchy);
-			ImGui::EndMenu();
+			auto& r = renderItems[objName];
+			if (ImGui::Selectable(objName.c_str(), selected == n))
+			{
+				selected = n;
+			}
+			++n;
 		}
-		ImGui::EndMenuBar();
+		if (selected != -1)
+			ShowObjectInspector(&show_inspector, OrderedRenderItemList[selected], renderItems, materials);
 	}
+
 	ImGui::End();
 
 	mCommandList->SetDescriptorHeaps(1, mSrvHeap.GetAddressOf());

@@ -16,7 +16,6 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 
 	// Star parsing the root of XML doc ---- "scene"
 	tinyxml2::XMLElement* entry = docHandle.FirstChildElement("scene").ToElement();
-	std::map<std::string, UINT> materialMap;
 
 	if (entry)
 	{
@@ -36,10 +35,11 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 					tinyxml2::XMLElement* materialElem = materialNode->ToElement();
 					const char* materialName = materialElem->Attribute("name");
 					std::string sMaterialName(materialName);
-					if (materialMap.find(sMaterialName) == materialMap.end())
+					if (mMaterialItems.find(sMaterialName) == mMaterialItems.end())
 					{
 						// Build new material from XML & append to MaterialBuffer
-						WMaterialData tmpMatData;
+						WMaterial tmpMatData;
+						tmpMatData.Name = sMaterialName;
 						tinyxml2::XMLElement* transparentElem = materialNode->FirstChildElement("transparent");
 						if (transparentElem)
 						{
@@ -70,14 +70,16 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							DirectX::XMFLOAT3 emissionVal = parseFloat3(emissionElem->GetText());
 							tmpMatData.Emission = emissionVal;
 						}
-						mMaterialBuffer.push_back(std::move(tmpMatData));
-						r.matIdx = mMaterialBuffer.size() - 1;
-						materialMap[sMaterialName] = mMaterialBuffer.size() - 1;
+						r.materialName = sMaterialName;
+						r.matIdx = mMaterialItems.size();
+						tmpMatData.MatIdx = mMaterialItems.size();
+						mMaterialItems[sMaterialName] = (std::move(tmpMatData));
 					}
 					else
 					{
 						// Direct use the record in materialMap
-						r.matIdx = materialMap[sMaterialName];
+						r.materialName = sMaterialName;
+						r.matIdx = mMaterialItems[sMaterialName].MatIdx;
 					}
 				}
 				tinyxml2::XMLNode* meshNode = e->FirstChildElement("Mesh");
@@ -188,7 +190,8 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 						}
 					}
 				}
-				mRenderItems.push_back(std::move(r));
+				r.objIdx = mRenderItems.size();
+				mRenderItems[objectName] = (std::move(r));
 			}
 			else if (nodeType == "light")
 			{

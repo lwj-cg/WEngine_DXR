@@ -42,8 +42,8 @@ public:
 	void Parse(const char* xmlDoc);
 public:
 	std::map<std::string, WGeometryRecord>& getGeometryMap() { return mGeometryMap; };
-	std::vector<WRenderItem>& getRenderItems() { return mRenderItems; };
-	std::vector<WMaterialData>& getMaterialBuffer() { return mMaterialBuffer; };
+	std::map<std::string, WRenderItem>& getRenderItems() { return mRenderItems; };
+	std::map<std::string, WMaterial>& getMaterialItems() { return mMaterialItems; };
 	std::vector<tinyobj::real_t>& getVertexBuffer() { return mVertexBuffer; };
 	std::vector<UINT32>& getIndexBuffer() { return mIndexBuffer; };
 	WCamereConfig& getCameraConfig() { return mCameraConfig; };
@@ -51,8 +51,8 @@ public:
 private:
 	tinyxml2::XMLDocument mXMLParser;
 	std::map<std::string, WGeometryRecord> mGeometryMap;
-	std::vector<WRenderItem> mRenderItems;
-	std::vector<WMaterialData> mMaterialBuffer;
+	std::map<std::string, WRenderItem> mRenderItems;
+	std::map<std::string, WMaterial> mMaterialItems;
 	std::vector<tinyobj::real_t> mVertexBuffer;
 	std::vector<UINT32> mIndexBuffer;
 	std::vector<ParallelogramLight> mLights;
