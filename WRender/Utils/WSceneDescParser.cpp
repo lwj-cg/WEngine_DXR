@@ -70,6 +70,40 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							DirectX::XMFLOAT3 emissionVal = parseFloat3(emissionElem->GetText());
 							tmpMatData.Emission = emissionVal;
 						}
+						tinyxml2::XMLElement* diffuseMapElem = materialNode->FirstChildElement("diffuseMap");
+						if (diffuseMapElem)
+						{
+							std::string textureName = diffuseMapElem->Attribute("name");
+							std::wstring textureFileName = string2wstring(diffuseMapElem->GetText());
+							tmpMatData.DiffuseMapName = textureName;
+							if (mTextureItems.find(textureName) == mTextureItems.end())
+							{
+								WTextureRecord tmpTextureRecord(textureName,textureFileName,mTextureItems.size());
+								tmpMatData.DiffuseMapIdx = tmpTextureRecord.TextureIdx;
+								mTextureItems[textureName] = std::move(tmpTextureRecord);
+							}
+							else
+							{
+								tmpMatData.DiffuseMapIdx = mTextureItems.at(textureName).TextureIdx;
+							}
+						}
+						tinyxml2::XMLElement* normalMapElem = materialNode->FirstChildElement("normalMap");
+						if (normalMapElem)
+						{
+							std::string textureName = normalMapElem->Attribute("name");
+							std::wstring textureFileName = string2wstring(normalMapElem->GetText());
+							tmpMatData.NormalMapName = textureName;
+							if (mTextureItems.find(textureName) == mTextureItems.end())
+							{
+								WTextureRecord tmpTextureRecord(textureName, textureFileName, mTextureItems.size());
+								tmpMatData.NormalMapIdx = tmpTextureRecord.TextureIdx;
+								mTextureItems[textureName] = std::move(tmpTextureRecord);
+							}
+							else
+							{
+								tmpMatData.NormalMapIdx = mTextureItems.at(textureName).TextureIdx;
+							}
+						}
 						r.materialName = sMaterialName;
 						r.matIdx = mMaterialItems.size();
 						tmpMatData.MatIdx = mMaterialItems.size();
@@ -113,21 +147,39 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							auto& materials = reader.GetMaterials();
 
 							// Set params in renderItem & update vertex buffer
-							std::vector<tinyobj::real_t> vertices = attrib.vertices;
+							const auto& vertices = attrib.vertices;
+							const auto& normals = attrib.normals;
+							const auto& texcoords = attrib.texcoords;
 							r.vertexOffsetInBytes = mVertexBuffer.size() * sizeof(tinyobj::real_t);
 							r.vertexCount = vertices.size() / 3; // One vertex is consist of 3 coordinates
 							mVertexBuffer.insert(mVertexBuffer.end(), vertices.begin(), vertices.end());
+							if (normals.size() > 0)
+							{
+								r.normalOffsetInBytes = mNormalBuffer.size() * sizeof(tinyobj::real_t);
+								mNormalBuffer.insert(mNormalBuffer.end(), normals.begin(), normals.end());
+							}
+							if (texcoords.size() > 0)
+							{
+								r.texCoordOffsetInBytes = mTexCoordBuffer.size() * sizeof(tinyobj::real_t);
+								mTexCoordBuffer.insert(mTexCoordBuffer.end(), texcoords.begin(), texcoords.end());
+							}
 
 							// Set params in renderItem & update index buffer
 							std::vector<UINT32> indices;
-							getIndicesFromStructShape(shapes, indices);
+							std::vector<INT32> normal_indices;
+							std::vector<INT32> texcoord_indices;
+							getIndicesFromStructShape(shapes, indices, normal_indices, texcoord_indices);
 							r.indexOffsetInBytes = mIndexBuffer.size() * sizeof(UINT32);
 							r.indexCount = indices.size();
 							mIndexBuffer.insert(mIndexBuffer.end(), indices.begin(), indices.end());
+							mNormalIndexBuffer.insert(mNormalIndexBuffer.end(), normal_indices.begin(), normal_indices.end());
+							mTexCoordIndexBuffer.insert(mTexCoordIndexBuffer.end(), texcoord_indices.begin(), texcoord_indices.end());
 
 							// Build temp geometry record & store to mGeometryMap
 							WGeometryRecord tempGeometryRecord;
 							tempGeometryRecord.vertexOffsetInBytes = r.vertexOffsetInBytes;
+							tempGeometryRecord.normalOffsetInBytes = r.normalOffsetInBytes;
+							tempGeometryRecord.texCoordOffsetInBytes = r.texCoordOffsetInBytes;
 							tempGeometryRecord.vertexCount = r.vertexCount;
 							tempGeometryRecord.indexOffsetInBytes = r.indexOffsetInBytes;
 							tempGeometryRecord.indexCount = r.indexCount;
@@ -139,6 +191,8 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							// Direct use the record in mGeometryMap
 							const auto& geometryRecord = mGeometryMap[sFilename];
 							r.vertexOffsetInBytes = geometryRecord.vertexOffsetInBytes;
+							r.normalOffsetInBytes = geometryRecord.normalOffsetInBytes;
+							r.texCoordOffsetInBytes = geometryRecord.texCoordOffsetInBytes;
 							r.vertexCount = geometryRecord.vertexCount;
 							r.indexOffsetInBytes = geometryRecord.indexOffsetInBytes;
 							r.indexCount = geometryRecord.indexCount;
@@ -341,24 +395,68 @@ DirectX::XMFLOAT4X4 parseFloat4x4(const char* text)
 	return xMatrix;
 }
 
-void getIndicesFromStructShape(const std::vector<tinyobj::shape_t>& p_shapes, std::vector<UINT32>& indices)
+void getIndicesFromStructShape(
+	const std::vector<tinyobj::shape_t>& p_shapes, 
+	std::vector<UINT32>& indices, std::vector<INT32>& normal_indices,
+	std::vector<INT32>& texcoord_indices)
 {
 	// At present, assume that there is only one shape
 	for (const auto& shape : p_shapes)
 	{
-		std::vector<UINT32> s_indices;
-		getIndicesFromStructIndex(shape.mesh.indices, s_indices);
-		indices.insert(indices.end(), s_indices.begin(), s_indices.end());
+		std::vector<UINT32> v_indices;
+		std::vector<INT32> n_indices;
+		std::vector<INT32> t_indices;
+		getIndicesFromStructIndex(shape.mesh.indices, v_indices);
+		getNormalIndicesFromStructIndex(shape.mesh.indices, n_indices);
+		getTexCoordIndicesFromStructIndex(shape.mesh.indices, t_indices);
+		indices.insert(indices.end(), v_indices.begin(), v_indices.end());
+		normal_indices.insert(normal_indices.end(), n_indices.begin(), n_indices.end());
+		texcoord_indices.insert(texcoord_indices.end(), t_indices.begin(), t_indices.end());
 	}
 	return;
 }
 
-void getIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<UINT32>& s_indices)
+void getIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<UINT32>& v_indices)
 {
-	s_indices.resize(p_indices.size());
+	v_indices.resize(p_indices.size());
 	for (size_t i = 0; i < p_indices.size(); i++)
 	{
-		s_indices[i] = static_cast<UINT32>(p_indices[i].vertex_index);
+		v_indices[i] = static_cast<UINT32>(p_indices[i].vertex_index);
 	}
 	return;
+}
+
+void getNormalIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& n_indices)
+{
+	n_indices.resize(p_indices.size());
+	for (size_t i = 0; i < p_indices.size(); i++)
+	{
+		n_indices[i] = static_cast<INT32>(p_indices[i].normal_index);
+	}
+	return;
+}
+
+void getTexCoordIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& t_indices)
+{
+	t_indices.resize(p_indices.size());
+	for (size_t i = 0; i < p_indices.size(); i++)
+	{
+		t_indices[i] = static_cast<INT32>(p_indices[i].texcoord_index);
+	}
+	return;
+}
+
+std::wstring string2wstring(const std::string& s) {
+	size_t convertedChars = 0;
+	setlocale(LC_ALL, "chs");
+	std::string curLocale = setlocale(LC_ALL, NULL);   //curLocale="C"
+	setlocale(LC_ALL, "chs");
+	const char* source = s.c_str();
+	size_t charNum = sizeof(char) * s.size() + 1;
+	wchar_t* dest = new wchar_t[charNum];
+	mbstowcs_s(&convertedChars, dest, charNum, source, _TRUNCATE);
+	std::wstring result = dest;
+	delete[] dest;
+	setlocale(LC_ALL, curLocale.c_str());
+	return result;
 }

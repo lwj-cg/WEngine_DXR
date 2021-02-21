@@ -18,12 +18,21 @@ DirectX::XMFLOAT3 parseFloat3(std::string text);
 DirectX::XMFLOAT4 parseFloat4(const char* text);
 DirectX::XMFLOAT4 parseFloat4(std::string text);
 DirectX::XMFLOAT4X4 parseFloat4x4(const char* text);
-void getIndicesFromStructShape(const std::vector<tinyobj::shape_t>& p_shapes, std::vector<UINT32>& indices);
+void getIndicesFromStructShape(
+	const std::vector<tinyobj::shape_t>& p_shapes,
+	std::vector<UINT32>& indices, std::vector<INT32>& normal_indices,
+	std::vector<INT32>& texcoord_indices);
 void getIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<UINT32>& s_indices);
+void getNormalIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& n_indices);
+void getTexCoordIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& t_indices);
+std::wstring string2wstring(const std::string& str);
 
 struct WGeometryRecord
 {
+	// -1 means not used
 	UINT64 vertexOffsetInBytes;  // Offset of the first vertex in the vertex buffer
+	UINT64 normalOffsetInBytes = -1;  // Offset of the first normal in the normal buffer
+	UINT64 texCoordOffsetInBytes = -1;  // Offset of the first texcoord in the texcoord buffer
 	UINT32 vertexCount;    // Number of vertices to consider in the buffer
 	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
 	UINT32 indexCount;    // Number of indices to consider in the buffer
@@ -44,8 +53,13 @@ public:
 	std::map<std::string, WGeometryRecord>& getGeometryMap() { return mGeometryMap; };
 	std::map<std::string, WRenderItem>& getRenderItems() { return mRenderItems; };
 	std::map<std::string, WMaterial>& getMaterialItems() { return mMaterialItems; };
+	std::map<std::string, WTextureRecord>& getTextureItems() { return mTextureItems; };
 	std::vector<tinyobj::real_t>& getVertexBuffer() { return mVertexBuffer; };
+	std::vector<tinyobj::real_t>& getNormalBuffer() { return mNormalBuffer; };
+	std::vector<tinyobj::real_t>& getTexCoordBuffer() { return mTexCoordBuffer; };
 	std::vector<UINT32>& getIndexBuffer() { return mIndexBuffer; };
+	std::vector<INT32>& getNormalIndexBuffer() { return mNormalIndexBuffer; };
+	std::vector<INT32>& getTexCoordIndexBuffer() { return mTexCoordIndexBuffer; };
 	WCamereConfig& getCameraConfig() { return mCameraConfig; };
 	std::vector<ParallelogramLight>& getLights() { return mLights; }
 private:
@@ -53,8 +67,13 @@ private:
 	std::map<std::string, WGeometryRecord> mGeometryMap;
 	std::map<std::string, WRenderItem> mRenderItems;
 	std::map<std::string, WMaterial> mMaterialItems;
+	std::map<std::string, WTextureRecord> mTextureItems;
 	std::vector<tinyobj::real_t> mVertexBuffer;
+	std::vector<tinyobj::real_t> mNormalBuffer;
+	std::vector<tinyobj::real_t> mTexCoordBuffer;
 	std::vector<UINT32> mIndexBuffer;
+	std::vector<INT32> mNormalIndexBuffer;
+	std::vector<INT32> mTexCoordIndexBuffer;
 	std::vector<ParallelogramLight> mLights;
 	WCamereConfig mCameraConfig;
 };

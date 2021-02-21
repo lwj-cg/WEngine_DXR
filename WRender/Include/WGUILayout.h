@@ -118,6 +118,10 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
+	if (m.DiffuseMapIdx >= 0)
+		ImGui::Text("DiffuseMap: %s", m.DiffuseMapName.c_str());
+	if (m.NormalMapIdx >= 0)
+		ImGui::Text("NormalMap: %s", m.NormalMapName.c_str());
 
 	ImGui::End();
 }
@@ -221,6 +225,9 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	{
 		// Early out if the window is collapsed, as an optimization.
 		ImGui::End();
+		mCommandList->SetDescriptorHeaps(1, mSrvHeap.GetAddressOf());
+		ImGui::Render();
+		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), mCommandList.Get());
 		return;
 	}
 

@@ -2,15 +2,7 @@
 #include "PBR.hlsl"
 #include "Helpers.hlsl"
 #include "Random.hlsl"
-    
-// Raytracing acceleration structure, accessed as a SRV
-RaytracingAccelerationStructure SceneBVH : register(t0);
-
-StructuredBuffer<ObjectConstants> gObjectBuffer : register(t0, space1);
-StructuredBuffer<MaterialData> gMaterialBuffer : register(t0, space2);
-StructuredBuffer<Vertex> gVertexBuffer : register(t0, space3);
-StructuredBuffer<int> gIndexBuffer : register(t0, space4);
-StructuredBuffer<ParallelogramLight> gLightBuffer : register(t0, space5);
+#include "HitCommon.hlsl"
 
 [shader("closesthit")]
 void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
@@ -25,23 +17,50 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     ObjectConstants objectData = gObjectBuffer[InstanceID()];
     uint vertId = 3 * PrimitiveIndex() + objectData.IndexOffset;
     uint vertOffset = objectData.VertexOffset;
+    int texCoordOffset = objectData.TexCoordOffset;
     float3 v0 = gVertexBuffer[vertOffset + gIndexBuffer[vertId]].pos;
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
+    float2 uv0, uv1, uv2;
+    if (texCoordOffset >= 0)
+    {
+        uv0 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId]].uv;
+        uv1 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId + 1]].uv;
+        uv2 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId + 2]].uv;
+    }
+    else
+    {
+        uv0 = float2(0, 0);
+        uv1 = float2(1, 0);
+        uv2 = float2(1, 1);
+    }
+    float3 barycentrics = float3(1.f - attrib.bary.x - attrib.bary.y, attrib.bary.x, attrib.bary.y);
+    float2 uv = barycentrics.x * uv0 + barycentrics.y * uv1 + barycentrics.z * uv2;
+    
+    // Fetch Material Data
+    uint matIdx = objectData.MatIdx;
+    MaterialData matData = gMaterialBuffer[matIdx];
     float3 geometric_normal = normalize(cross(v1 - v0, v2 - v0));
     float4x4 objectToWorld = objectData.ObjectToWorld;
     float3 world_geometric_normal = mul(geometric_normal, (float3x3) objectToWorld);
     world_geometric_normal = normalize(world_geometric_normal);
     float3 ray_direction = normalize(WorldRayDirection());
-    float3 ffnormal = faceforward(world_geometric_normal, -ray_direction);
+    float3 ffnormal;
+    int normalMapIdx = matData.NormalMapIdx;
+    if (normalMapIdx>=0)
+    {
+        float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
+        ffnormal = faceforward(shading_normal, -ray_direction);
+    }
+    else
+    {
+        ffnormal = faceforward(world_geometric_normal, -ray_direction);
+    }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     float z1 = rnd(current_payload.seed);
     float z2 = rnd(current_payload.seed);
     
-    // Fetch Material Data
-    uint matIdx = objectData.MatIdx;
-    MaterialData matData = gMaterialBuffer[matIdx];
     
     if (any(matData.Emission))
     {
@@ -50,12 +69,14 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
         return;
     }
     
+    int diffuseMapIdx = matData.DiffuseMapIdx;
+    float3 albedo = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb : matData.Albedo.rgb;
     float3 baseColor;
     int in_to_out = dot(ray_direction, world_geometric_normal) > 0;
 
     float3 a;
     float b;
-    baseColor = DiffuseAndSpecularFromMetallic(matData.Albedo.rgb, matData.Metallic, a, b);
+    baseColor = DiffuseAndSpecularFromMetallic(albedo, matData.Metallic, a, b);
     b = current_payload.depth + 1;
     float cut_off = 1 / b;
     

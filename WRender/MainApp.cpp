@@ -141,7 +141,7 @@ private:
 
 	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
 	//std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
-	std::unordered_map<std::string, std::unique_ptr<Texture>> mTextures;
+	std::unordered_map<std::string, std::unique_ptr<WTexture>> mTextures;
 	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
 	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
 
@@ -229,8 +229,10 @@ private:
 	// #DXR
 	void CreateRaytracingOutputBuffer();
 	void CreateShaderResourceHeap();
+	void CreateTextureShaderResourceHeap();
 	ComPtr<ID3D12Resource> m_outputResource = nullptr;
 	ComPtr<ID3D12DescriptorHeap> m_srvUavHeap;
+	ComPtr<ID3D12DescriptorHeap> m_textureSrvHeap;
 
 	// #DXR
 	void CreateShaderBindingTable();
@@ -249,13 +251,21 @@ private:
 	std::map<std::string, WMaterial> mMaterials;
 	void SetupSceneWithXML(const char* filename);
 	void SetupCamera(const WCamereConfig& cameraConfig);
-
+	void LoadTextures(const std::map<std::string, WTextureRecord>& mTextureItems);
 
 	// Vertex Buffer & Index Buffer
 	ComPtr<ID3D12Resource> mVertexBuffer = nullptr;
 	ComPtr<ID3D12Resource> mVertexBufferUploader = nullptr;
+	ComPtr<ID3D12Resource> mNormalBuffer = nullptr;
+	ComPtr<ID3D12Resource> mNormalBufferUploader = nullptr;
+	ComPtr<ID3D12Resource> mTexCoordBuffer = nullptr;
+	ComPtr<ID3D12Resource> mTexCoordBufferUploader = nullptr;
 	ComPtr<ID3D12Resource> mIndexBuffer = nullptr;
 	ComPtr<ID3D12Resource> mIndexBufferUploader = nullptr;
+	ComPtr<ID3D12Resource> mNormalIndexBuffer = nullptr;
+	ComPtr<ID3D12Resource> mNormalIndexBufferUploader = nullptr;
+	ComPtr<ID3D12Resource> mTexCoordIndexBuffer = nullptr;
+	ComPtr<ID3D12Resource> mTexCoordIndexBufferUploader = nullptr;
 
 	// Frame resource on CPU
 	WPassConstants mPassCB;
@@ -368,6 +378,7 @@ bool MainApp::Initialize()
 	// UAV), and create the heap referencing the resources used by the raytracing,
 	// such as the acceleration structure
 	CreateShaderResourceHeap(); // #DXR
+	//CreateTextureShaderResourceHeap();
 	// Create the shader binding table and indicating which shaders
 	// are invoked for each instance in the  AS
 	CreateShaderBindingTable();
@@ -392,7 +403,7 @@ void MainApp::OnResize()
 	//	CreateRaytracingOutputBuffer();
 	//	CreateShaderResourceHeap();
 	//}
-	
+
 }
 
 void MainApp::Update(const GameTimer& gt)
@@ -511,7 +522,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.clearColor, 0, nullptr);
 	mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
-	// ???Specify the buffers we are going to render to.
+	// Specify the buffers we are going to render to.
 	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
 	// #DXR
@@ -690,10 +701,16 @@ void MainApp::UpdateObjectCBs(const GameTimer& gt)
 		// This needs to be tracked per frame resource.
 		if (r.NumFramesDirty > 0)
 		{
+			INT32 normalOffset = (INT32)(r.normalOffsetInBytes >= 0 ?
+				r.normalOffsetInBytes / (sizeof(SNormal)) : r.normalOffsetInBytes);
+			INT32 texCoordOffset = (INT32)(r.texCoordOffsetInBytes >= 0 ?
+				r.texCoordOffsetInBytes / (sizeof(SNormal)) : r.texCoordOffsetInBytes);
 			WObjectConstants objConstants(
 				DirectX::XMMatrixTranspose(r.transform), r.matIdx,
 				(UINT)(r.vertexOffsetInBytes / (sizeof(SVertex))),
-				(UINT)(r.indexOffsetInBytes / sizeof(UINT))
+				(UINT)(r.indexOffsetInBytes / sizeof(UINT)),
+				normalOffset,
+				texCoordOffset
 			);
 
 			currObjectBuffer->CopyData(r.objIdx, objConstants);
@@ -719,7 +736,8 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 		if (m.NumFramesDirty > 0)
 		{
 			WMaterialData materialData(
-				m.Albedo, m.Emission, m.Transparent, m.Smoothness, m.Metallic
+				m.Albedo, m.Emission, m.Transparent, m.Smoothness, m.Metallic,
+				m.DiffuseMapIdx, m.NormalMapIdx
 			);
 
 			currMaterialBuffer->CopyData(m.MatIdx, materialData);
@@ -1162,15 +1180,25 @@ ComPtr<ID3D12RootSignature> MainApp::CreateHitSignature() {
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 3);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 4);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 5);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 6);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 7);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 8);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 9);
 	rsc.AddHeapRangesParameter(
 		{
 			{
 				0 /*t0*/, 1, 0,
 				D3D12_DESCRIPTOR_RANGE_TYPE_SRV /*Top-level acceleration structure*/,
 				1
+			},
+			{
+				1 /*t1*/, mTextures.size(), 0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				2
 			}
 		});
-	return rsc.Generate(md3dDevice.Get(), true);
+	auto staticSamplers = GetStaticSamplers();
+	return rsc.Generate(md3dDevice.Get(), true, (UINT)staticSamplers.size(), staticSamplers.data());
 }
 
 ComPtr<ID3D12RootSignature> MainApp::CreateHitShadowSignature()
@@ -1237,7 +1265,7 @@ void MainApp::CreateRayTracingPipeline()
 	m_hitShadowSignature = CreateHitShadowSignature();
 	m_missSignature = CreateMissSignature();
 	m_missShadowSignature = CreateEmptySignature();
-	
+
 	// 3 different shaders can be invoked to obtain an intersection: an
 	// intersection shader is called
 	// when hitting the bounding box of non-triangular geometry. This is beyond
@@ -1280,7 +1308,7 @@ void MainApp::CreateRayTracingPipeline()
 	// then requires a trace depth of 1. Note that this recursion depth should be
 	// kept to a minimum for best performance. Path tracing algorithms can be
 	// easily flattened into a simple loop in the ray generation.
-	pipeline.SetMaxRecursionDepth(10);
+	pipeline.SetMaxRecursionDepth(8);
 
 	// Compile the pipeline for execution on the GPU
 	m_rtStateObject = pipeline.Generate();
@@ -1326,7 +1354,7 @@ void MainApp::CreateShaderResourceHeap() {
 	// Create a SRV/UAV/CBV descriptor heap. We need 2 entries - 1 UAV for the
 	// raytracing output and 1 SRV for the TLAS
 	m_srvUavHeap = nv_helpers_dx12::CreateDescriptorHeap(
-		md3dDevice.Get(), 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+		md3dDevice.Get(), 2 + mTextures.size(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	// Get a handle to the heap memory on the CPU side, to be able to write the
 	// descriptors directly
@@ -1342,8 +1370,7 @@ void MainApp::CreateShaderResourceHeap() {
 		srvHandle);
 
 	// Add the Top Level AS SRV right after the raytracing output buffer
-	srvHandle.ptr += md3dDevice->GetDescriptorHandleIncrementSize(
-		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	srvHandle.ptr += mCbvSrvDescriptorSize;
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -1353,6 +1380,72 @@ void MainApp::CreateShaderResourceHeap() {
 		mTopLevelASBuffers.pResult->GetGPUVirtualAddress();
 	// Write the acceleration structure view in the heap
 	md3dDevice->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC tSrvDesc = {};
+	tSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	tSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	tSrvDesc.Texture2D.MostDetailedMip = 0;
+	tSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	tSrvDesc.Texture2D.MipLevels = -1;
+
+	// Reorder the texture items
+	std::vector<WTexture*> orderedTextureItems(mTextures.size());
+
+	for (const auto& texItem : mTextures)
+	{
+		orderedTextureItems[texItem.second->TextureIdx] = texItem.second.get();
+	}
+	for (const auto& texItem : orderedTextureItems)
+	{
+		srvHandle.ptr += mCbvSrvDescriptorSize;
+		auto tex = texItem->Resource;
+		tSrvDesc.Format = tex->GetDesc().Format;
+		tSrvDesc.Texture2D.MipLevels = tex->GetDesc().MipLevels;
+		md3dDevice->CreateShaderResourceView(tex.Get(), &tSrvDesc, srvHandle);
+		//if (texItem->TextureIdx < orderedTextureItems.size() - 1)
+	}
+}
+
+void MainApp::CreateTextureShaderResourceHeap()
+{
+	m_textureSrvHeap = nv_helpers_dx12::CreateDescriptorHeap(
+		md3dDevice.Get(), mTextures.size(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_textureSrvHeap->GetCPUDescriptorHandleForHeapStart());
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	srvDesc.Texture2D.MipLevels = -1;
+
+	// Reorder the texture items
+	std::vector<WTexture*> orderedTextureItems(mTextures.size());
+
+	for (const auto& texItem : mTextures)
+	{
+		orderedTextureItems[texItem.second->TextureIdx] = texItem.second.get();
+	}
+	for (const auto& texItem : orderedTextureItems)
+	{
+		auto tex = texItem->Resource;
+		srvDesc.Format = tex->GetDesc().Format;
+		srvDesc.Texture2D.MipLevels = tex->GetDesc().MipLevels;
+		md3dDevice->CreateShaderResourceView(tex.Get(), &srvDesc, srvHandle);
+		//if (texItem->TextureIdx < orderedTextureItems.size() - 1)
+			srvHandle.Offset(1, mCbvSrvDescriptorSize);
+	}
+
+	/*for (const auto& texItem : mTextures)
+	{
+		auto tex = texItem.second->Resource;
+		srvDesc.Format = tex->GetDesc().Format;
+		srvDesc.Texture2D.MipLevels = tex->GetDesc().MipLevels;
+		srvHandle.Offset(texItem.second->TextureIdx, mCbvSrvDescriptorSize);
+		md3dDevice->CreateShaderResourceView(tex.Get(), &srvDesc, srvHandle);
+		srvHandle.Offset(-(texItem.second->TextureIdx), mCbvSrvDescriptorSize);
+	}*/
 }
 
 //-----------------------------------------------------------------------------
@@ -1386,10 +1479,13 @@ void MainApp::CreateShaderBindingTable() {
 	auto objectBufferPointer = reinterpret_cast<UINT64*>(currentObjectBuffer->Resource()->GetGPUVirtualAddress());
 	auto currentMaterialBuffer = mFrameResources[mCurrFrameResourceIndex]->MaterialBuffer.get();
 	auto materialBufferPointer = reinterpret_cast<UINT64*>(currentMaterialBuffer->Resource()->GetGPUVirtualAddress());
-	/*auto objectBufferPointer = reinterpret_cast<UINT64*>(mObjectBufferArray->GetGPUVirtualAddress());
-	auto materialBufferPointer = reinterpret_cast<UINT64*>(mMaterialBuffer->GetGPUVirtualAddress());*/
-	auto vertexBufferPointer = reinterpret_cast<UINT64*>(mVertexBuffer->GetGPUVirtualAddress());
-	auto indexBufferPointer = reinterpret_cast<UINT64*>(mIndexBuffer->GetGPUVirtualAddress());
+
+	auto VertexBufferPointer = reinterpret_cast<UINT64*>(mVertexBuffer->GetGPUVirtualAddress());
+	auto NormalBufferPointer = reinterpret_cast<UINT64*>(mNormalBuffer->GetGPUVirtualAddress());
+	auto TexCoordBufferPointer = reinterpret_cast<UINT64*>(mTexCoordBuffer->GetGPUVirtualAddress());
+	auto IndexBufferPointer = reinterpret_cast<UINT64*>(mIndexBuffer->GetGPUVirtualAddress());
+	auto NormalIndexBufferPointer = reinterpret_cast<UINT64*>(mNormalIndexBuffer->GetGPUVirtualAddress());
+	auto TexCoordIndexBufferPointer = reinterpret_cast<UINT64*>(mTexCoordIndexBuffer->GetGPUVirtualAddress());
 	auto lightBufferPointer = reinterpret_cast<UINT64*>(mLightBuffer->GetGPUVirtualAddress());
 	// The ray generation only uses heap data
 	m_sbtHelper.AddRayGenerationProgram(L"RayGen",
@@ -1410,8 +1506,12 @@ void MainApp::CreateShaderBindingTable() {
 		{
 			objectBufferPointer,
 			materialBufferPointer,
-			vertexBufferPointer,
-			indexBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
 			lightBufferPointer,
 			heapPointer
 		});
@@ -1419,8 +1519,12 @@ void MainApp::CreateShaderBindingTable() {
 		{
 			objectBufferPointer,
 			materialBufferPointer,
-			vertexBufferPointer,
-			indexBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
 			lightBufferPointer,
 			heapPointer
 		});
@@ -1493,8 +1597,15 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	mGeometryMap = mSceneDescParser.getGeometryMap();
 	mRenderItems = mSceneDescParser.getRenderItems();
 	mMaterials = mSceneDescParser.getMaterialItems();
+	const auto& textureItems = mSceneDescParser.getTextureItems();
+
 	const auto& vertexBuffer = mSceneDescParser.getVertexBuffer();
+	const auto& normalBuffer = mSceneDescParser.getNormalBuffer();
+	const auto& texCoordBuffer = mSceneDescParser.getTexCoordBuffer();
 	const auto& indexBuffer = mSceneDescParser.getIndexBuffer();
+	const auto& normalIndexBuffer = mSceneDescParser.getNormalIndexBuffer();
+	const auto& texCoordIndexBuffer = mSceneDescParser.getTexCoordIndexBuffer();
+
 	const auto& cameraConfig = mSceneDescParser.getCameraConfig();
 	const auto& lights = mSceneDescParser.getLights();
 
@@ -1503,10 +1614,30 @@ void MainApp::SetupSceneWithXML(const char* filename)
 		md3dDevice.Get(), mCommandList.Get(), vertexBuffer.data(),
 		vertexBufferSize, mVertexBufferUploader
 	);
+	UINT64 normalBufferSize = normalBuffer.size() * sizeof(tinyobj::real_t);
+	mNormalBuffer = d3dUtil::CreateDefaultBuffer(
+		md3dDevice.Get(), mCommandList.Get(), normalBuffer.data(),
+		normalBufferSize, mNormalBufferUploader
+	);
+	UINT64 texCoordBufferSize = texCoordBuffer.size() * sizeof(tinyobj::real_t);
+	mTexCoordBuffer = d3dUtil::CreateDefaultBuffer(
+		md3dDevice.Get(), mCommandList.Get(), texCoordBuffer.data(),
+		texCoordBufferSize, mTexCoordBufferUploader
+	);
 	UINT64 indexBufferSize = indexBuffer.size() * sizeof(UINT32);
 	mIndexBuffer = d3dUtil::CreateDefaultBuffer(
 		md3dDevice.Get(), mCommandList.Get(), indexBuffer.data(),
 		indexBufferSize, mIndexBufferUploader
+	);
+	UINT64 normalIndexBufferSize = normalIndexBuffer.size() * sizeof(INT32);
+	mNormalIndexBuffer = d3dUtil::CreateDefaultBuffer(
+		md3dDevice.Get(), mCommandList.Get(), normalIndexBuffer.data(),
+		normalIndexBufferSize, mNormalIndexBufferUploader
+	);
+	UINT64 texCoordIndexBufferSize = texCoordIndexBuffer.size() * sizeof(INT32);
+	mTexCoordIndexBuffer = d3dUtil::CreateDefaultBuffer(
+		md3dDevice.Get(), mCommandList.Get(), texCoordIndexBuffer.data(),
+		texCoordIndexBufferSize, mTexCoordIndexBufferUploader
 	);
 	UINT64 lightBufferSize = lights.size() * sizeof(ParallelogramLight);
 	mLightBuffer = d3dUtil::CreateDefaultBuffer(
@@ -1526,6 +1657,8 @@ void MainApp::SetupSceneWithXML(const char* filename)
 
 	// Setup the camera based on configs in XML
 	SetupCamera(cameraConfig);
+	// Load Textures based on texture items in XML
+	LoadTextures(textureItems);
 }
 
 
@@ -1540,4 +1673,20 @@ void MainApp::SetupCamera(const WCamereConfig& cameraConfig)
 	XMVECTOR vTarget = vPosition + 140.0f * vDirection;
 	mCamera.SetPosition(position);
 	mCamera.LookAt(vPosition, vTarget, vWorldUP);
+}
+
+void MainApp::LoadTextures(const std::map<std::string, WTextureRecord>& textureItems)
+{
+	for (const auto& titem : textureItems)
+	{
+		const auto& t = titem.second;
+		auto texMap = std::make_unique<WTexture>();
+		texMap->TextureIdx = t.TextureIdx;
+		texMap->Name = t.Name;
+		texMap->Filename = t.Filename;
+		ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+			mCommandList.Get(), texMap->Filename.c_str(),
+			texMap->Resource, texMap->UploadHeap));
+		mTextures[texMap->Name] = std::move(texMap);
+	}
 }

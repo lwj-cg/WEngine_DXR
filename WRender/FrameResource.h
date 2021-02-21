@@ -12,10 +12,15 @@ struct WObjectConstants
 	UINT     MatIdx;
 	UINT     VertexOffset;
 	UINT     IndexOffset;
-	UINT     ObjPad2;
+	INT32    NormalOffset = -1;
+	INT32    TexCoordOffset = -1;
+
 	WObjectConstants() = default;
-	WObjectConstants(DirectX::XMMATRIX _Transform, UINT _MatIdx, UINT _VertexOffset, UINT _IndexOffset)
-		: MatIdx(_MatIdx), VertexOffset(_VertexOffset), IndexOffset(_IndexOffset)
+	WObjectConstants(
+		DirectX::XMMATRIX _Transform, UINT _MatIdx, UINT _VertexOffset, 
+		UINT _IndexOffset, INT32 _NormalOffset = -1, INT32 _TexCoordOffset = -1)
+		: MatIdx(_MatIdx), VertexOffset(_VertexOffset), IndexOffset(_IndexOffset),
+		NormalOffset(_NormalOffset), TexCoordOffset(_TexCoordOffset)
 	{
 		DirectX::XMStoreFloat4x4(&ObjectToWorld, _Transform);
 	};
@@ -105,6 +110,16 @@ struct SVertex
 	DirectX::XMFLOAT3 Pos;
 };
 
+struct SNormal
+{
+	DirectX::XMFLOAT3 Normal;
+};
+
+struct STexCoord
+{
+	DirectX::XMFLOAT2 UV;
+};
+
 struct RVertex
 {
 	typedef DirectX::XMFLOAT3 XMFLOAT3;
@@ -146,6 +161,8 @@ struct WMaterial
 	WMaterial() = default;
 	// Unique material name for lookup.
 	std::string Name;
+	std::string DiffuseMapName;
+	std::string NormalMapName;
 	// Position in material buffer
 	UINT MatIdx;
 
@@ -166,6 +183,29 @@ struct WMaterial
 
 };
 
+struct WTextureRecord
+{
+	UINT TextureIdx;
+	std::string Name;
+	std::wstring Filename;
+	WTextureRecord() = default;
+	WTextureRecord(std::string _Name, std::wstring _Filename, UINT _TextureIdx)
+		: Name(_Name), Filename(_Filename), TextureIdx(_TextureIdx)
+	{
+	}
+};
+
+struct WTexture
+{
+	// Unique material name for lookup.
+	UINT TextureIdx;
+	std::string Name;
+	std::wstring Filename;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> Resource = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> UploadHeap = nullptr;
+};
+
 struct WRenderItem
 {
 	WRenderItem() = default;
@@ -175,7 +215,10 @@ struct WRenderItem
 	std::string objName;
 	std::string materialName;
 	std::string geometryName;
+	// -1 means not used
 	UINT64 vertexOffsetInBytes;  // Offset of the first vertex in the vertex buffer
+	INT64 normalOffsetInBytes = -1;  // Offset of the first normal in the normal buffer
+	INT64 texCoordOffsetInBytes = -1;  // Offset of the first texcoord in the texcoord buffer
 	UINT32 vertexCount;    // Number of vertices to consider in the buffer
 	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
 	UINT32 indexCount;    // Number of indices to consider in the buffer

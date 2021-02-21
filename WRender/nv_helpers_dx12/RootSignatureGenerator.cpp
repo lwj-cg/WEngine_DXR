@@ -192,4 +192,49 @@ ID3D12RootSignature* RootSignatureGenerator::Generate(ID3D12Device* device, bool
   return pRootSig;
 }
 
+//--------------------------------------------------------------------------------------------------
+//
+// Create the root signature from the set of parameters, in the order of the addition calls
+ID3D12RootSignature* RootSignatureGenerator::Generate(ID3D12Device* device, bool isLocal,
+    UINT numStaticSamplers, const D3D12_STATIC_SAMPLER_DESC* _pStaticSamplers)
+{
+    // Go through all the parameters, and set the actual addresses of the heap range descriptors based
+    // on their indices in the range set array
+    for (size_t i = 0; i < m_parameters.size(); i++)
+    {
+        if (m_parameters[i].ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
+        {
+            m_parameters[i].DescriptorTable.pDescriptorRanges = m_ranges[m_rangeLocations[i]].data();
+        }
+    }
+    // Specify the root signature with its set of parameters
+    D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
+    rootDesc.NumParameters = static_cast<UINT>(m_parameters.size());
+    rootDesc.pParameters = m_parameters.data();
+    rootDesc.NumStaticSamplers = numStaticSamplers;
+    rootDesc.pStaticSamplers = _pStaticSamplers;
+    // Set the flags of the signature. By default root signatures are global, for example for vertex
+    // and pixel shaders. For raytracing shaders the root signatures are local.
+    rootDesc.Flags =
+        isLocal ? D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE : D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+    // Create the root signature from its descriptor
+    ID3DBlob* pSigBlob;
+    ID3DBlob* pErrorBlob;
+    HRESULT hr = D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &pSigBlob,
+        &pErrorBlob);
+    if (FAILED(hr))
+    {
+        throw std::logic_error("Cannot serialize root signature");
+    }
+    ID3D12RootSignature* pRootSig;
+    hr = device->CreateRootSignature(0, pSigBlob->GetBufferPointer(), pSigBlob->GetBufferSize(),
+        IID_PPV_ARGS(&pRootSig));
+    if (FAILED(hr))
+    {
+        throw std::logic_error("Cannot create root signature");
+    }
+    return pRootSig;
+}
+
 } // namespace nv_helpers_dx12

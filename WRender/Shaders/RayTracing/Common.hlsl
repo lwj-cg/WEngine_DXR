@@ -35,7 +35,8 @@ struct ObjectConstants
     uint MatIdx;
 	uint VertexOffset;
 	uint IndexOffset;
-	uint ObjPad2;
+    int NormalOffset;
+    int TexCoordOffset;
 };
 
 struct MaterialData
@@ -66,6 +67,16 @@ struct ParallelogramLight
 struct Vertex
 {
     float3 pos;
+};
+
+struct Normal
+{
+    float3 normal;
+};
+
+struct TexCoord
+{
+    float2 uv;
 };
 
 #endif
