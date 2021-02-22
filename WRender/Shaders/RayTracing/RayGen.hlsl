@@ -81,7 +81,7 @@ void RayGen()
         {
             RayDesc ray = make_Ray(origin, direction);
             // Trace the ray (Hit group 0 : default, Miss 0 : common miss)
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 0, ray, payload);
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
             if (payload.done)
             {

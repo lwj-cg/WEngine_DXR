@@ -38,6 +38,8 @@ public:
 	static void HelpMarker(const char* desc);
 	static void ShowAppPropertyEditor(bool* p_open, MaterialList& materials);
 	static void ShowObjectInspector(bool* p_open, std::string objName, RenderItemList& renderItems, MaterialList& materials);
+	static void ShowMaterialAttributes(std::string materialName, MaterialList& materials);
+	static void ShowMaterialModifier(bool* p_open, std::string materialName, MaterialList& materials);
 	static void ShowPlaceholderObject(const char* prefix, int uid,
 		MaterialList& materials, const char* material_name);
 	static void DrawGUILayout(
@@ -86,6 +88,7 @@ void WGUILayout::ShowAppPropertyEditor(bool* p_open, MaterialList& materials)
 void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 	RenderItemList& renderItems, MaterialList& materials)
 {
+	if (renderItems.find(objName) == renderItems.end()) return;
 	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
 	if (!ImGui::Begin("Object Inspector", p_open))
 	{
@@ -107,9 +110,31 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 		r.NumFramesDirty = gNumFrameResources;
 	ImGui::Separator();
 
-	// Object's material property
-	ImGui::Text("Material: %s", r.materialName.c_str());
-	auto& m = materials.at(r.materialName);
+	// Object's material attributes
+	static std::vector<const char*> material_items(materials.size());
+	static int item_current = 0;
+	int n = 0;
+	for (auto iter = materials.begin(); iter != materials.end(); ++iter,++n)
+	{
+		material_items[n] = iter->first.c_str();
+		if (iter->first == r.materialName) item_current = n;
+	}
+	if (ImGui::Combo("Material", &item_current, material_items.data(), materials.size()))
+	{
+		r.materialName = std::string(material_items[item_current]);
+		r.matIdx = materials[r.materialName].MatIdx;
+		r.NumFramesDirty = gNumFrameResources;
+	}
+	ShowMaterialAttributes(r.materialName, materials);
+
+	ImGui::End();
+}
+
+void WGUILayout::ShowMaterialAttributes(std::string materialName,
+	MaterialList& materials)
+{
+	if (materials.find(materialName) == materials.end()) return;
+	auto& m = materials.at(materialName);
 	if (ImGui::ColorEdit4("Albedo##value", &m.Albedo.x))
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
@@ -122,9 +147,26 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 		ImGui::Text("DiffuseMap: %s", m.DiffuseMapName.c_str());
 	if (m.NormalMapIdx >= 0)
 		ImGui::Text("NormalMap: %s", m.NormalMapName.c_str());
+}
+
+void WGUILayout::ShowMaterialModifier(bool* p_open, std::string materialName,
+	MaterialList& materials)
+{
+	if (materials.find(materialName) == materials.end()) return;
+	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Material Modifier", p_open))
+	{
+		ImGui::End();
+		return;
+	}
+
+	// Show attributes of the material
+	ImGui::Text("Material Name: %s", materialName.c_str());
+	ShowMaterialAttributes(materialName, materials);
 
 	ImGui::End();
 }
+
 
 //-----------------------------------------------------------------------------
 // [SECTION] Example App: Property Editor / ShowExampleAppPropertyEditor()
@@ -170,18 +212,45 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
 	PassData& passData, RenderItemList& renderItems, MaterialList& materials)
 {
-	// Prepare
-	static std::vector<std::string> OrderedRenderItemList(renderItems.size());
-	for (const auto& ritem : renderItems)
-	{
-		const auto& r = ritem.second;
-		OrderedRenderItemList[r.objIdx] = ritem.first;
-	}
+	//// Prepare
+	//static std::vector<std::string> OrderedRenderItemNames(renderItems.size());
+	//for (const auto& ritem : renderItems)
+	//{
+	//	const auto& r = ritem.second;
+	//	OrderedRenderItemNames[r.objIdx] = ritem.first;
+	//}
+	//static std::vector<std::string> OrderedMaterialNames(materials.size());
+	//for (const auto& mitem : materials)
+	//{
+	//	const auto& m = mitem.second;
+	//	OrderedMaterialNames[m.MatIdx] = mitem.first;
+	//}
 
 	// Start the Dear ImGui frame
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+
+	ImGuiStyle& style = ImGui::GetStyle();
+	static ImGuiStyle ref_saved_style;
+
+	for (size_t i = 0; i < ImGuiCol_COUNT; i++)
+	{
+		// Set the transparency of window bg
+		if (ImGui::GetStyleColorName(i) == "WindowBg")
+		{
+			style.Colors[i].w = 0.3;
+		}
+		// Set the transparency of title bg
+		if (ImGui::GetStyleColorName(i) == "TitleBg")
+		{
+			style.Colors[i].w = 0.4;
+		}
+		if (ImGui::GetStyleColorName(i) == "TitleBgActive")
+		{
+			style.Colors[i].w = 0.4;
+		}
+	}
 
 	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
 	bool show_demo_window = false;
@@ -233,11 +302,9 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	static bool show_hierarchy = false;
 	static bool show_inspector = false;
+	static bool show_material_modifier = false;
 	static bool show_app_property_editor = false;
 	if (show_hierarchy)     ShowAppPropertyEditor(&show_hierarchy, materials);
-	static int selected = -1;
-	if (show_inspector && selected != -1)
-		ShowObjectInspector(&show_inspector, OrderedRenderItemList[selected], renderItems, materials);
 
 	// e.g. Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
 	ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
@@ -251,18 +318,40 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	if (ImGui::CollapsingHeader("Hierarchy"))
 	{
+		static int selected = -1;
+		static std::string selectedObjName;
 		int n = 0;
-		for (const auto& objName : OrderedRenderItemList)
+		for (const auto& ritem : renderItems)
 		{
-			auto& r = renderItems[objName];
+			const auto& objName = ritem.first;
 			if (ImGui::Selectable(objName.c_str(), selected == n))
 			{
 				selected = n;
+				selectedObjName = objName;
 			}
 			++n;
 		}
 		if (selected != -1)
-			ShowObjectInspector(&show_inspector, OrderedRenderItemList[selected], renderItems, materials);
+			ShowObjectInspector(&show_inspector, selectedObjName, renderItems, materials);
+	}
+
+	if (ImGui::CollapsingHeader("Material Modifier"))
+	{
+		static int selected = -1;
+		static std::string selectedMaterialName;
+		int n = 0;
+		for (const auto& mitem : materials)
+		{
+			const auto& materialName = mitem.first;
+			if (ImGui::Selectable(materialName.c_str(), selected == n))
+			{
+				selected = n;
+				selectedMaterialName = materialName;
+			}
+			++n;
+		}
+		if (selected != -1)
+			ShowMaterialModifier(&show_material_modifier, selectedMaterialName, materials);
 	}
 
 	ImGui::End();
