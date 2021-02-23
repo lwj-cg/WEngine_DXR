@@ -184,8 +184,9 @@ private:
 	/// Create the main acceleration structure that holds
 	/// all instances of the scene
 	/// \param     instances : pair of BLAS and transform
+	/// \param     updateOnly: if true, perform a refit instead of a full build
 	void CreateTopLevelAS(
-		const std::vector<std::pair<ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances);
+		const std::vector<std::pair<ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly=false);
 
 	/// Create all acceleration structures, bottom and top
 	void CreateAccelerationStructures();
@@ -197,6 +198,7 @@ private:
 	nv_helpers_dx12::TopLevelASGenerator mTopLevelASGenerator;
 	AccelerationStructureBuffers mTopLevelASBuffers;
 	std::vector<std::pair<ComPtr<ID3D12Resource>, DirectX::XMMATRIX>> mInstances;
+
 
 	// #DXR
 	ComPtr<ID3D12RootSignature> CreateRayGenSignature();
@@ -480,7 +482,7 @@ void MainApp::DrawForRasterize(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 
-	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials);
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials, mTextures);
 
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -515,6 +517,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	// Reusing the command list reuses memory.
 	ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), nullptr));
 
+
 	mCommandList->RSSetViewports(1, &mScreenViewport);
 	mCommandList->RSSetScissorRects(1, &mScissorRect);
 
@@ -524,6 +527,8 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 
 	// Specify the buffers we are going to render to.
 	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+
+	CreateTopLevelAS(mInstances, true);
 
 	// #DXR
 	// Bind the descriptor heap giving access to the top-level acceleration
@@ -601,7 +606,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 
-	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials);
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials, mTextures);
 
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -701,6 +706,8 @@ void MainApp::UpdateObjectCBs(const GameTimer& gt)
 		// This needs to be tracked per frame resource.
 		if (r.NumFramesDirty > 0)
 		{
+			r.UpdateTransform();
+			mInstances[r.objIdx].second = r.transform;
 			INT32 normalOffset = (INT32)(r.normalOffsetInBytes >= 0 ?
 				r.normalOffsetInBytes / (sizeof(SNormal)) : r.normalOffsetInBytes);
 			INT32 texCoordOffset = (INT32)(r.texCoordOffsetInBytes >= 0 ?
@@ -1094,8 +1101,13 @@ MainApp::CreateBottomLevelAS(
 //
 void MainApp::CreateTopLevelAS(
 	const std::vector<std::pair<ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>
-	& instances // pair of bottom level AS and matrix of the instance
+	& instances, // pair of bottom level AS and matrix of the instance
+	bool updateOnly  // If true the top-level AS will only be refitted and not
+				   // rebuilt from scratch
 ) {
+	
+	if (!updateOnly)
+	{
 	// Gather all the instances into the builder helper
 	for (size_t i = 0; i < instances.size(); i++) {
 		mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
@@ -1103,34 +1115,35 @@ void MainApp::CreateTopLevelAS(
 			static_cast<UINT>(0));
 	}
 
-	// As for the bottom-level AS, the building the AS requires some scratch space
-	// to store temporary data in addition to the actual AS. In the case of the
-	// top-level AS, the instance descriptors also need to be stored in GPU
-	// memory. This call outputs the memory requirements for each (scratch,
-	// results, instance descriptors) so that the application can allocate the
-	// corresponding memory
-	UINT64 scratchSize, resultSize, instanceDescsSize;
+		// As for the bottom-level AS, the building the AS requires some scratch space
+		// to store temporary data in addition to the actual AS. In the case of the
+		// top-level AS, the instance descriptors also need to be stored in GPU
+		// memory. This call outputs the memory requirements for each (scratch,
+		// results, instance descriptors) so that the application can allocate the
+		// corresponding memory
+		UINT64 scratchSize, resultSize, instanceDescsSize;
 
-	mTopLevelASGenerator.ComputeASBufferSizes(md3dDevice.Get(), true, &scratchSize,
-		&resultSize, &instanceDescsSize);
+		mTopLevelASGenerator.ComputeASBufferSizes(md3dDevice.Get(), true, &scratchSize,
+			&resultSize, &instanceDescsSize);
 
-	// Create the scratch and result buffers. Since the build is all done on GPU,
-	// those can be allocated on the default heap
-	mTopLevelASBuffers.pScratch = nv_helpers_dx12::CreateBuffer(
-		md3dDevice.Get(), scratchSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-		nv_helpers_dx12::kDefaultHeapProps);
-	mTopLevelASBuffers.pResult = nv_helpers_dx12::CreateBuffer(
-		md3dDevice.Get(), resultSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-		D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-		nv_helpers_dx12::kDefaultHeapProps);
+		// Create the scratch and result buffers. Since the build is all done on GPU,
+		// those can be allocated on the default heap
+		mTopLevelASBuffers.pScratch = nv_helpers_dx12::CreateBuffer(
+			md3dDevice.Get(), scratchSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			nv_helpers_dx12::kDefaultHeapProps);
+		mTopLevelASBuffers.pResult = nv_helpers_dx12::CreateBuffer(
+			md3dDevice.Get(), resultSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+			D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+			nv_helpers_dx12::kDefaultHeapProps);
 
-	// The buffer describing the instances: ID, shader binding information,
-	// matrices ... Those will be copied into the buffer by the helper through
-	// mapping, so the buffer has to be allocated on the upload heap.
-	mTopLevelASBuffers.pInstanceDesc = nv_helpers_dx12::CreateBuffer(
-		md3dDevice.Get(), instanceDescsSize, D3D12_RESOURCE_FLAG_NONE,
-		D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+		// The buffer describing the instances: ID, shader binding information,
+		// matrices ... Those will be copied into the buffer by the helper through
+		// mapping, so the buffer has to be allocated on the upload heap.
+		mTopLevelASBuffers.pInstanceDesc = nv_helpers_dx12::CreateBuffer(
+			md3dDevice.Get(), instanceDescsSize, D3D12_RESOURCE_FLAG_NONE,
+			D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+	}
 
 	// After all the buffers are allocated, or if only an update is required, we
 	// can build the acceleration structure. Note that in the case of the update
@@ -1139,7 +1152,8 @@ void MainApp::CreateTopLevelAS(
 	mTopLevelASGenerator.Generate(mCommandList.Get(),
 		mTopLevelASBuffers.pScratch.Get(),
 		mTopLevelASBuffers.pResult.Get(),
-		mTopLevelASBuffers.pInstanceDesc.Get());
+		mTopLevelASBuffers.pInstanceDesc.Get(),
+		updateOnly, mTopLevelASBuffers.pResult.Get());
 }
 
 
@@ -1684,6 +1698,7 @@ void MainApp::LoadTextures(const std::map<std::string, WTextureRecord>& textureI
 		texMap->TextureIdx = t.TextureIdx;
 		texMap->Name = t.Name;
 		texMap->Filename = t.Filename;
+		texMap->TextureType = t.TextureType;
 		ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
 			mCommandList.Get(), texMap->Filename.c_str(),
 			texMap->Resource, texMap->UploadHeap));

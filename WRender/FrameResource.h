@@ -183,11 +183,17 @@ struct WMaterial
 
 };
 
+enum WTEXTURE_TYPE {
+	DIFFUSE_MAP,
+	NORMAL_MAP
+};
+
 struct WTextureRecord
 {
 	UINT TextureIdx;
 	std::string Name;
 	std::wstring Filename;
+	WTEXTURE_TYPE TextureType;
 	WTextureRecord() = default;
 	WTextureRecord(std::string _Name, std::wstring _Filename, UINT _TextureIdx)
 		: Name(_Name), Filename(_Filename), TextureIdx(_TextureIdx)
@@ -201,6 +207,7 @@ struct WTexture
 	UINT TextureIdx;
 	std::string Name;
 	std::wstring Filename;
+	WTEXTURE_TYPE TextureType;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> Resource = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Resource> UploadHeap = nullptr;
@@ -234,6 +241,32 @@ struct WRenderItem
 	// update to each FrameResource.  Thus, when we modify obect data we should set 
 	// NumFramesDirty = gNumFrameResources so that each frame resource gets the update.
 	int NumFramesDirty = gNumFrameResources;
+	void UpdateTransform()
+	{
+		// translation
+		auto& transformF4x4 = MathHelper::Identity4x4();
+		auto& transformMatrix = DirectX::XMLoadFloat4x4(&transformF4x4);
+		auto& transVector = DirectX::XMLoadFloat3(&translation);
+		auto& T = DirectX::XMMatrixTranslationFromVector(transVector);
+		transformMatrix = DirectX::XMMatrixMultiply(T, transformMatrix);
+
+		// rotation
+		using DirectX::XM_PI;
+		auto& Rx = DirectX::XMMatrixRotationX(rotation.x * XM_PI / 180.0f);
+		transformMatrix = DirectX::XMMatrixMultiply(Rx, transformMatrix);
+		auto& Ry = DirectX::XMMatrixRotationY(rotation.y * XM_PI / 180.0f);
+		transformMatrix = DirectX::XMMatrixMultiply(Ry, transformMatrix);
+		auto& Rz = DirectX::XMMatrixRotationZ(rotation.z * XM_PI / 180.0f);
+		transformMatrix = DirectX::XMMatrixMultiply(Rz, transformMatrix);
+
+		// scaling
+		auto& scaleVector = DirectX::XMLoadFloat3(&scaling);
+		auto& S = DirectX::XMMatrixScalingFromVector(scaleVector);
+		transformMatrix = DirectX::XMMatrixMultiply(S, transformMatrix);
+		
+		// update
+		transform = transformMatrix;
+	}
 };
 
 struct ParallelogramLight

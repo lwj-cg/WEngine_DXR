@@ -34,18 +34,18 @@ public:
 	typedef WPassConstants PassData;
 	typedef std::map<std::string, WRenderItem> RenderItemList;
 	typedef std::map<std::string, WMaterial> MaterialList;
+	typedef std::unordered_map<std::string, std::unique_ptr<WTexture>> TextureList;
 	WGUILayout() = default;
 	static void HelpMarker(const char* desc);
 	static void ShowAppPropertyEditor(bool* p_open, MaterialList& materials);
-	static void ShowObjectInspector(bool* p_open, std::string objName, RenderItemList& renderItems, MaterialList& materials);
-	static void ShowMaterialAttributes(std::string materialName, MaterialList& materials);
-	static void ShowMaterialModifier(bool* p_open, std::string materialName, MaterialList& materials);
+	static void ShowObjectInspector(bool* p_open, std::string objName, RenderItemList& renderItems, MaterialList& materials, TextureList& textures);
+	static void ShowMaterialAttributes(std::string materialName, MaterialList& materials, TextureList& textures);
+	static void ShowMaterialModifier(bool* p_open, std::string materialName, MaterialList& materials, TextureList& textures);
 	static void ShowPlaceholderObject(const char* prefix, int uid,
 		MaterialList& materials, const char* material_name);
-	static void DrawGUILayout(
-		const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
-		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
-		PassData& passData, RenderItemList& renderItems, MaterialList& materials
+	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList, 
+		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, 
+		PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures
 	);
 };
 
@@ -86,7 +86,7 @@ void WGUILayout::ShowAppPropertyEditor(bool* p_open, MaterialList& materials)
 
 // Create a simple object inspector
 void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
-	RenderItemList& renderItems, MaterialList& materials)
+	RenderItemList& renderItems, MaterialList& materials, TextureList& textures)
 {
 	if (renderItems.find(objName) == renderItems.end()) return;
 	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
@@ -102,11 +102,11 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 
 	// Object's transform property
 	ImGui::Text("Transform");
-	if (ImGui::DragFloat3("Translation##value", &r.translation.x, 0.01f, 0, 1))
+	if (ImGui::DragFloat3("Translation##value", &r.translation.x, 0.01f))
 		r.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("Rotation##value", &r.rotation.x, 0.01f, 0, 1))
+	if (ImGui::DragFloat3("Rotation##value", &r.rotation.x, 0.1f, -180, 180))
 		r.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("Scaling##value", &r.scaling.x, 0.01f, 0, 1))
+	if (ImGui::DragFloat3("Scaling##value", &r.scaling.x, 0.1f, 0))
 		r.NumFramesDirty = gNumFrameResources;
 	ImGui::Separator();
 
@@ -125,13 +125,13 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 		r.matIdx = materials[r.materialName].MatIdx;
 		r.NumFramesDirty = gNumFrameResources;
 	}
-	ShowMaterialAttributes(r.materialName, materials);
+	ShowMaterialAttributes(r.materialName, materials, textures);
 
 	ImGui::End();
 }
 
 void WGUILayout::ShowMaterialAttributes(std::string materialName,
-	MaterialList& materials)
+	MaterialList& materials, TextureList& textures)
 {
 	if (materials.find(materialName) == materials.end()) return;
 	auto& m = materials.at(materialName);
@@ -143,14 +143,94 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
-	if (m.DiffuseMapIdx >= 0)
-		ImGui::Text("DiffuseMap: %s", m.DiffuseMapName.c_str());
-	if (m.NormalMapIdx >= 0)
-		ImGui::Text("NormalMap: %s", m.NormalMapName.c_str());
+	static ImGuiComboFlags flags = 0;
+	const char* diffuseMapPreviewValue = m.DiffuseMapIdx >= 0 ? m.DiffuseMapName.c_str() : "None";
+	const char* normalMapPreviewValue = m.NormalMapIdx >= 0 ? m.NormalMapName.c_str() : "None";
+	static int diffuseMapCurrentIdx;
+	static int diffuseMapLastIdx;
+	static int normalMapCurrentIdx;
+	static int normalMapLastIdx;
+	diffuseMapCurrentIdx = m.DiffuseMapIdx;
+	diffuseMapLastIdx = m.DiffuseMapIdx;
+	normalMapCurrentIdx = m.NormalMapIdx;
+	normalMapLastIdx = m.NormalMapIdx;
+	if (ImGui::BeginCombo("Diffuse Map", diffuseMapPreviewValue, flags))
+	{
+		for (const auto& titem : textures)
+		{
+			if (titem.second->TextureType==DIFFUSE_MAP)
+			{
+				bool is_selected = diffuseMapCurrentIdx == titem.second->TextureIdx;
+				if (ImGui::Selectable(titem.first.c_str(), is_selected))
+				{
+					diffuseMapCurrentIdx = titem.second->TextureIdx;
+					// value changed
+					if (diffuseMapCurrentIdx != diffuseMapLastIdx)
+					{
+						m.DiffuseMapName = titem.first.c_str();
+						m.DiffuseMapIdx = titem.second->TextureIdx;
+						m.NumFramesDirty = gNumFrameResources;
+					}
+					diffuseMapLastIdx = diffuseMapCurrentIdx;
+				}
+			}
+		}
+		bool is_selected = diffuseMapCurrentIdx == -1;
+		if (ImGui::Selectable("None", is_selected))
+		{
+			diffuseMapCurrentIdx = -1;
+			// value changed
+			if (diffuseMapCurrentIdx != diffuseMapLastIdx)
+			{
+				m.DiffuseMapName = "";
+				m.DiffuseMapIdx = -1;
+				m.NumFramesDirty = gNumFrameResources;
+			}
+			diffuseMapLastIdx = diffuseMapCurrentIdx;
+		}
+		ImGui::EndCombo();
+	}
+
+	if (ImGui::BeginCombo("Normal Map", normalMapPreviewValue, flags))
+	{
+		for (const auto& titem : textures)
+		{
+			if (titem.second->TextureType == NORMAL_MAP)
+			{
+				bool is_selected = normalMapCurrentIdx == titem.second->TextureIdx;
+				if (ImGui::Selectable(titem.first.c_str(), is_selected))
+				{
+					normalMapCurrentIdx = titem.second->TextureIdx;
+					// value changed
+					if (normalMapCurrentIdx != normalMapLastIdx)
+					{
+						m.NormalMapName = titem.first.c_str();
+						m.NormalMapIdx = titem.second->TextureIdx;
+						m.NumFramesDirty = gNumFrameResources;
+					}
+					normalMapLastIdx = normalMapCurrentIdx;
+				}
+			}
+		}
+		bool is_selected = normalMapCurrentIdx == -1;
+		if (ImGui::Selectable("None", is_selected))
+		{
+			normalMapCurrentIdx = -1;
+			// value changed
+			if (normalMapCurrentIdx != normalMapLastIdx)
+			{
+				m.NormalMapName = "";
+				m.NormalMapIdx = -1;
+				m.NumFramesDirty = gNumFrameResources;
+			}
+			normalMapLastIdx = normalMapCurrentIdx;
+		}
+		ImGui::EndCombo();
+	}
 }
 
 void WGUILayout::ShowMaterialModifier(bool* p_open, std::string materialName,
-	MaterialList& materials)
+	MaterialList& materials, TextureList& textures)
 {
 	if (materials.find(materialName) == materials.end()) return;
 	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
@@ -162,7 +242,7 @@ void WGUILayout::ShowMaterialModifier(bool* p_open, std::string materialName,
 
 	// Show attributes of the material
 	ImGui::Text("Material Name: %s", materialName.c_str());
-	ShowMaterialAttributes(materialName, materials);
+	ShowMaterialAttributes(materialName, materials, textures);
 
 	ImGui::End();
 }
@@ -210,7 +290,7 @@ void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
 
 void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
 	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
-	PassData& passData, RenderItemList& renderItems, MaterialList& materials)
+	PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures)
 {
 	//// Prepare
 	//static std::vector<std::string> OrderedRenderItemNames(renderItems.size());
@@ -332,7 +412,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 			++n;
 		}
 		if (selected != -1)
-			ShowObjectInspector(&show_inspector, selectedObjName, renderItems, materials);
+			ShowObjectInspector(&show_inspector, selectedObjName, renderItems, materials, textures);
 	}
 
 	if (ImGui::CollapsingHeader("Material Modifier"))
@@ -351,7 +431,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 			++n;
 		}
 		if (selected != -1)
-			ShowMaterialModifier(&show_material_modifier, selectedMaterialName, materials);
+			ShowMaterialModifier(&show_material_modifier, selectedMaterialName, materials, textures);
 	}
 
 	ImGui::End();

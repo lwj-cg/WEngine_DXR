@@ -79,6 +79,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							if (mTextureItems.find(textureName) == mTextureItems.end())
 							{
 								WTextureRecord tmpTextureRecord(textureName,textureFileName,mTextureItems.size());
+								tmpTextureRecord.TextureType = DIFFUSE_MAP;
 								tmpMatData.DiffuseMapIdx = tmpTextureRecord.TextureIdx;
 								mTextureItems[textureName] = std::move(tmpTextureRecord);
 							}
@@ -96,6 +97,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							if (mTextureItems.find(textureName) == mTextureItems.end())
 							{
 								WTextureRecord tmpTextureRecord(textureName, textureFileName, mTextureItems.size());
+								tmpTextureRecord.TextureType = NORMAL_MAP;
 								tmpMatData.NormalMapIdx = tmpTextureRecord.TextureIdx;
 								mTextureItems[textureName] = std::move(tmpTextureRecord);
 							}
@@ -218,6 +220,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							if (translationElem)
 							{
 								auto& transFloat3 = parseFloat3(translationElem->GetText());
+								r.translation = transFloat3;
 								auto& transVector = DirectX::XMLoadFloat3(&transFloat3);
 								auto& T = DirectX::XMMatrixTranslationFromVector(transVector);
 								transformMatrix = DirectX::XMMatrixMultiply(T, transformMatrix);
@@ -226,6 +229,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							{
 								using DirectX::XM_PI;
 								auto& rotFloat3 = parseFloat3(rotationElem->GetText());
+								r.rotation = rotFloat3;
 								auto& Rx = DirectX::XMMatrixRotationX(rotFloat3.x * XM_PI / 180.0f);
 								transformMatrix = DirectX::XMMatrixMultiply(Rx, transformMatrix);
 								auto& Ry = DirectX::XMMatrixRotationY(rotFloat3.y * XM_PI / 180.0f);
@@ -236,6 +240,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							if (scalingElem)
 							{
 								auto& scaleFloat3 = parseFloat3(scalingElem->GetText());
+								r.scaling = scaleFloat3;
 								auto& scaleVector = DirectX::XMLoadFloat3(&scaleFloat3);
 								auto& S = DirectX::XMMatrixScalingFromVector(scaleVector);
 								transformMatrix = DirectX::XMMatrixMultiply(S, transformMatrix);
