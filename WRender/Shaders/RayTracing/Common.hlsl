@@ -35,6 +35,8 @@ struct ObjectConstants
     uint MatIdx;
 	uint VertexOffset;
 	uint IndexOffset;
+    uint HaveNormal;
+    uint HaveTexCoord;
     int NormalOffset;
     int TexCoordOffset;
 };

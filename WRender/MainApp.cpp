@@ -461,7 +461,7 @@ void MainApp::DrawForRasterize(const GameTimer& gt)
 	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.bgColor, 0, nullptr);
 	mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
-	// ???Specify the buffers we are going to render to.
+	// Specify the buffers we are going to render to.
 	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
 	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvSrvUavDescriptorHeap.Get() };
@@ -711,7 +711,7 @@ void MainApp::UpdateObjectCBs(const GameTimer& gt)
 			INT32 normalOffset = (INT32)(r.normalOffsetInBytes >= 0 ?
 				r.normalOffsetInBytes / (sizeof(SNormal)) : r.normalOffsetInBytes);
 			INT32 texCoordOffset = (INT32)(r.texCoordOffsetInBytes >= 0 ?
-				r.texCoordOffsetInBytes / (sizeof(SNormal)) : r.texCoordOffsetInBytes);
+				r.texCoordOffsetInBytes / (sizeof(STexCoord)) : r.texCoordOffsetInBytes);
 			WObjectConstants objConstants(
 				DirectX::XMMatrixTranspose(r.transform), r.matIdx,
 				(UINT)(r.vertexOffsetInBytes / (sizeof(SVertex))),
@@ -719,6 +719,8 @@ void MainApp::UpdateObjectCBs(const GameTimer& gt)
 				normalOffset,
 				texCoordOffset
 			);
+			objConstants.HaveNormal = r.HaveNormal;
+			objConstants.HaveTexCoord = r.HaveTexCoord;
 
 			currObjectBuffer->CopyData(r.objIdx, objConstants);
 
@@ -735,9 +737,6 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 	for (auto& mitem : mMaterials)
 	{
 		auto& m = mitem.second;
-		/*m.Albedo.y -= 0.01;
-		m.Albedo.y = max(m.Albedo.y, 0);
-		m.NumFramesDirty = gNumFrameResources;*/
 		// Only update the cbuffer data if the constants have changed.  
 		// This needs to be tracked per frame resource.
 		if (m.NumFramesDirty > 0)
@@ -1258,7 +1257,7 @@ void MainApp::CreateRayTracingPipeline()
 	m_missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Miss.hlsl");
 	m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
 	m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
-	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\AnyHit_Shadow.hlsl");
+	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_Shadow.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1270,6 +1269,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss_Shadow" });
 	pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit_Default" });
 	pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
+	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
 	// parameters and buffers will be accessed.
@@ -1290,7 +1290,7 @@ void MainApp::CreateRayTracingPipeline()
 	// together into a hit group.
 	pipeline.AddHitGroup(L"HitGroup_Default", L"ClosestHit_Default");
 	pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
-	pipeline.AddHitGroup(L"HitGroup_Shadow", L"", L"AnyHit_Shadow");
+	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
 	// that we can explicitly show that some shaders share the same root signature

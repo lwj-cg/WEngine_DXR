@@ -12,6 +12,8 @@ struct WObjectConstants
 	UINT     MatIdx;
 	UINT     VertexOffset;
 	UINT     IndexOffset;
+	UINT     HaveNormal = 0;
+	UINT     HaveTexCoord = 0;
 	INT32    NormalOffset = -1;
 	INT32    TexCoordOffset = -1;
 
@@ -213,6 +215,20 @@ struct WTexture
 	Microsoft::WRL::ComPtr<ID3D12Resource> UploadHeap = nullptr;
 };
 
+struct WGeometryRecord
+{
+	// -1 means not used
+	UINT64 vertexOffsetInBytes;  // Offset of the first vertex in the vertex buffer
+	INT64 normalOffsetInBytes = -1;  // Offset of the first normal in the normal buffer
+	INT64 texCoordOffsetInBytes = -1;  // Offset of the first texcoord in the texcoord buffer
+	UINT32 vertexCount;    // Number of vertices to consider in the buffer
+	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
+	UINT32 indexCount;    // Number of indices to consider in the buffer
+
+	UINT HaveNormal = 0;
+	UINT HaveTexCoord = 0;
+};
+
 struct WRenderItem
 {
 	WRenderItem() = default;
@@ -229,6 +245,10 @@ struct WRenderItem
 	UINT32 vertexCount;    // Number of vertices to consider in the buffer
 	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
 	UINT32 indexCount;    // Number of indices to consider in the buffer
+
+	UINT32 HaveNormal = 0;
+	UINT32 HaveTexCoord = 0;
+
 	DirectX::XMMATRIX transform;
 	DirectX::XMFLOAT3 translation = { 0,0,0 };
 	DirectX::XMFLOAT3 rotation = { 0,0,0 };

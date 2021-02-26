@@ -22,7 +22,8 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
     float2 uv0, uv1, uv2;
-    if (texCoordOffset >= 0)
+    //if (texCoordOffset < 0)
+    if (objectData.HaveTexCoord == 1)
     {
         uv0 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId]].uv;
         uv1 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId + 1]].uv;
@@ -65,7 +66,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     if (any(matData.Emission))
     {
         current_payload.done = true;
-        current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
+        current_payload.radiance += current_payload.countEmitted ? matData.Emission : (float3) 0;
         return;
     }
     
@@ -110,21 +111,13 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
 
                 if (refract(ray_direction, n, in_to_out ? refraction_index : 1.0f / refraction_index, p))
                 {
-                    RayDesc next_ray = make_Ray(hitpoint, p);
-
-                    // Cast shadow ray
-                    RayPayload_shadow shadow_payload;
-                    shadow_payload.inShadow = 0;
-                    // Trace the ray (Hit group 2 : shadow ray, Miss 1 : shadow miss)
-                    TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, next_ray, shadow_payload);
-                    // ?
-                    current_payload.radiance = shadow_payload.inShadow * baseColor / max_diffuse;
+                    current_payload.attenuation *= baseColor / max_diffuse;
+                    current_payload.direction = p;
                 }
-                else
-                {
-                    current_payload.done = true;
-                }
-                current_payload.direction = p;
+                //else
+                //{
+                //    current_payload.done = true;
+                //}
 
             }
             else if (z1 < refr_diff_refl.y)
@@ -150,10 +143,10 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
                     current_payload.attenuation *= PBR(matData, p, ffnormal, -ray_direction, 1) / pd / (1 - max_diffuse);
                     current_payload.direction = p;
                 }
-                else
-                {
-                    current_payload.done = true;
-                }
+                //else
+                //{
+                //    current_payload.done = true;
+                //}
             }
             current_payload.attenuation *= sum_w * b;
             //current_payload.attenuation *= sum_w;
@@ -181,7 +174,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
         {
             RayPayload_shadow shadow_payload;
             // ?
-            shadow_payload.inShadow = 0;
+            shadow_payload.inShadow = 1;
             // Note: bias both ends of the shadow ray, in case the light is also present as geometry in the scene.
             RayDesc shadow_ray = make_Ray(hitpoint, L, scene_epsilon, Ldist - scene_epsilon);
             // Trace the ray (Hit group 2 : shadow ray, Miss 1 : shadow miss)
@@ -201,7 +194,6 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     }
     current_payload.radiance = result;
     
-    //current_payload.radiance = ffnormal;
 }
 
 

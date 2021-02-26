@@ -3,11 +3,17 @@
 StructuredBuffer<ObjectConstants> gObjectBuffer : register(t0);
 StructuredBuffer<MaterialData> gMaterialBuffer : register(t0, space1);
 
+[shader("closesthit")]
+void ClosestHit_Shadow(inout RayPayload_shadow payload, Attributes attr)
+{
+    payload.inShadow = 0;
+}
+
 [shader("anyhit")]
 void AnyHit_Shadow(inout RayPayload_shadow payload, Attributes attr)
 {
     // Fetch Material Data
-    ObjectConstants objectData = gObjectBuffer[InstanceIndex()];
+    ObjectConstants objectData = gObjectBuffer[InstanceID()];
     uint matIdx = objectData.MatIdx;
     MaterialData matData = gMaterialBuffer[matIdx];
     // Modify the val of inShadow

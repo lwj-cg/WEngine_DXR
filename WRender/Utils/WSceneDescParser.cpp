@@ -158,11 +158,13 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							if (normals.size() > 0)
 							{
 								r.normalOffsetInBytes = mNormalBuffer.size() * sizeof(tinyobj::real_t);
+								r.HaveNormal = 1;
 								mNormalBuffer.insert(mNormalBuffer.end(), normals.begin(), normals.end());
 							}
 							if (texcoords.size() > 0)
 							{
 								r.texCoordOffsetInBytes = mTexCoordBuffer.size() * sizeof(tinyobj::real_t);
+								r.HaveTexCoord = 1;
 								mTexCoordBuffer.insert(mTexCoordBuffer.end(), texcoords.begin(), texcoords.end());
 							}
 
@@ -185,6 +187,8 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							tempGeometryRecord.vertexCount = r.vertexCount;
 							tempGeometryRecord.indexOffsetInBytes = r.indexOffsetInBytes;
 							tempGeometryRecord.indexCount = r.indexCount;
+							tempGeometryRecord.HaveNormal = r.HaveNormal;
+							tempGeometryRecord.HaveTexCoord = r.HaveTexCoord;
 							mGeometryMap[sFilename] = std::move(tempGeometryRecord);
 							r.geometryName = sFilename;
 						}
@@ -198,6 +202,8 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							r.vertexCount = geometryRecord.vertexCount;
 							r.indexOffsetInBytes = geometryRecord.indexOffsetInBytes;
 							r.indexCount = geometryRecord.indexCount;
+							r.HaveNormal = geometryRecord.HaveNormal;
+							r.HaveTexCoord = geometryRecord.HaveTexCoord;
 							r.geometryName = sFilename;
 						}
 					}

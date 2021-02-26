@@ -27,17 +27,6 @@ void getNormalIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indi
 void getTexCoordIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& t_indices);
 std::wstring string2wstring(const std::string& str);
 
-struct WGeometryRecord
-{
-	// -1 means not used
-	UINT64 vertexOffsetInBytes;  // Offset of the first vertex in the vertex buffer
-	UINT64 normalOffsetInBytes = -1;  // Offset of the first normal in the normal buffer
-	UINT64 texCoordOffsetInBytes = -1;  // Offset of the first texcoord in the texcoord buffer
-	UINT32 vertexCount;    // Number of vertices to consider in the buffer
-	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
-	UINT32 indexCount;    // Number of indices to consider in the buffer
-};
-
 struct WCamereConfig
 {
 	DirectX::XMFLOAT3 position = { 0.0f, 0.0f, 0.0f };
