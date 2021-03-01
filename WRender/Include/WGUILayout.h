@@ -396,7 +396,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	ImGui::Text("Scene: CornellBox");
 
-	if (ImGui::CollapsingHeader("Hierarchy"))
+	if (ImGui::CollapsingHeader("Objects"))
 	{
 		static int selected = -1;
 		static std::string selectedObjName;

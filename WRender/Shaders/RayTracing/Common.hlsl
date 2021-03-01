@@ -32,11 +32,10 @@ struct Attributes
 struct ObjectConstants
 {
     float4x4 ObjectToWorld;
+    float4x4 InverseTranspose;
     uint MatIdx;
 	uint VertexOffset;
 	uint IndexOffset;
-    uint HaveNormal;
-    uint HaveTexCoord;
     int NormalOffset;
     int TexCoordOffset;
 };

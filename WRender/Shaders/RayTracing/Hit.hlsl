@@ -22,8 +22,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
     float2 uv0, uv1, uv2;
-    //if (texCoordOffset < 0)
-    if (objectData.HaveTexCoord == 1)
+    if (texCoordOffset >= 0)
     {
         uv0 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId]].uv;
         uv1 = gTexCoordBuffer[texCoordOffset + gTexCoordIndexBuffer[vertId + 1]].uv;
@@ -42,8 +41,8 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     uint matIdx = objectData.MatIdx;
     MaterialData matData = gMaterialBuffer[matIdx];
     float3 geometric_normal = normalize(cross(v1 - v0, v2 - v0));
-    float4x4 objectToWorld = objectData.ObjectToWorld;
-    float3 world_geometric_normal = mul(geometric_normal, (float3x3) objectToWorld);
+    float4x4 inverseTranspose = objectData.InverseTranspose;
+    float3 world_geometric_normal = mul(geometric_normal, (float3x3) inverseTranspose);
     world_geometric_normal = normalize(world_geometric_normal);
     float3 ray_direction = normalize(WorldRayDirection());
     float3 ffnormal;
@@ -72,6 +71,15 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     
     int diffuseMapIdx = matData.DiffuseMapIdx;
     float3 albedo = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb : matData.Albedo.rgb;
+    
+    // Initialize surface info
+    SurfaceInfo IN;
+    IN.baseColor = albedo;
+    IN.transparent = matData.Transparent;
+    IN.metallic = matData.Metallic;
+    IN.smoothness = matData.Smoothness;
+    IN.normal = ffnormal;
+    
     float3 baseColor;
     int in_to_out = dot(ray_direction, world_geometric_normal) > 0;
 
@@ -80,6 +88,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     baseColor = DiffuseAndSpecularFromMetallic(albedo, matData.Metallic, a, b);
     b = current_payload.depth + 1;
     float cut_off = 1 / b;
+    float3 attenuationFactor = float3(1, 1, 1);
     
     current_payload.origin = hitpoint;
     if (current_payload.depth < max_depth)
@@ -111,21 +120,16 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
 
                 if (refract(ray_direction, n, in_to_out ? refraction_index : 1.0f / refraction_index, p))
                 {
-                    current_payload.attenuation *= baseColor / max_diffuse;
+                    attenuationFactor *= baseColor / max_diffuse;
                     current_payload.direction = p;
                 }
-                //else
-                //{
-                //    current_payload.done = true;
-                //}
-
             }
             else if (z1 < refr_diff_refl.y)
             { //ÂþÉä²¿·Ö
                 uniform_sample_hemisphere(z1, z2, p);
                 inverse_transform_with_onb(p, onb);
                 
-                current_payload.attenuation *= PBR(matData, p, ffnormal, -ray_direction, 0) / max_diffuse;
+                attenuationFactor *= PBR(IN, p, -ray_direction, 0) / max_diffuse;
                 current_payload.direction = p;
             }
             else
@@ -137,21 +141,17 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
                 inverse_transform_with_onb(n, onb);
                 p = reflect(ray_direction, n);
 
-                //if (dot(p, ffnormal) < 0) p = reflect(p, ffnormal);
                 if (dot(p, ffnormal) > 0)
                 {
-                    current_payload.attenuation *= PBR(matData, p, ffnormal, -ray_direction, 1) / pd / (1 - max_diffuse);
+                    attenuationFactor *= PBR(IN, p, -ray_direction, 1) / pd / (1 - max_diffuse);
                     current_payload.direction = p;
                 }
-                //else
-                //{
-                //    current_payload.done = true;
-                //}
             }
-            current_payload.attenuation *= sum_w * b;
+            attenuationFactor *= sum_w * b;
             //current_payload.attenuation *= sum_w;
         }
     }
+    current_payload.attenuation *= attenuationFactor;
 
     float3 result = float3(0.0f, 0.0f, 0.0f);
     for (int i = 0; i < gNumLights; ++i)
@@ -185,13 +185,14 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
                 const float A = length(cross(light.v1, light.v2));
                 // convert area based pdf to solid angle
                 const float weight = nDl * LnDl * A / (M_PI * Ldist * Ldist);
-                result += light.emission * weight * shadow_payload.inShadow;
                 float3 light_satu = light.emission * weight * shadow_payload.inShadow;
-                result += PBR(matData, L, light_satu, -ray_direction, 2);
+                //result += light_satu;
+                result += PBR(IN, L, -ray_direction, 2) * light_satu;
                 
             }
         }
     }
+    //current_payload.radiance = result / attenuationFactor;
     current_payload.radiance = result;
     
 }

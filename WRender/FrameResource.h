@@ -9,11 +9,10 @@ extern const int gNumFrameResources;
 struct WObjectConstants
 {
 	DirectX::XMFLOAT4X4 ObjectToWorld = MathHelper::Identity4x4();
+	DirectX::XMFLOAT4X4 InvTranspose = MathHelper::Identity4x4();
 	UINT     MatIdx;
 	UINT     VertexOffset;
 	UINT     IndexOffset;
-	UINT     HaveNormal = 0;
-	UINT     HaveTexCoord = 0;
 	INT32    NormalOffset = -1;
 	INT32    TexCoordOffset = -1;
 
@@ -24,6 +23,9 @@ struct WObjectConstants
 		: MatIdx(_MatIdx), VertexOffset(_VertexOffset), IndexOffset(_IndexOffset),
 		NormalOffset(_NormalOffset), TexCoordOffset(_TexCoordOffset)
 	{
+		auto InvMatrix = DirectX::XMMatrixInverse(&XMMatrixDeterminant(_Transform), _Transform);
+		auto InvTranposeMatrix = DirectX::XMMatrixTranspose(InvMatrix);
+		DirectX::XMStoreFloat4x4(&InvTranspose, InvTranposeMatrix);
 		DirectX::XMStoreFloat4x4(&ObjectToWorld, _Transform);
 	};
 };
@@ -225,8 +227,6 @@ struct WGeometryRecord
 	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
 	UINT32 indexCount;    // Number of indices to consider in the buffer
 
-	UINT HaveNormal = 0;
-	UINT HaveTexCoord = 0;
 };
 
 struct WRenderItem
@@ -245,9 +245,6 @@ struct WRenderItem
 	UINT32 vertexCount;    // Number of vertices to consider in the buffer
 	UINT64 indexOffsetInBytes;  // Offset of the first index in the index buffer
 	UINT32 indexCount;    // Number of indices to consider in the buffer
-
-	UINT32 HaveNormal = 0;
-	UINT32 HaveTexCoord = 0;
 
 	DirectX::XMMATRIX transform;
 	DirectX::XMFLOAT3 translation = { 0,0,0 };

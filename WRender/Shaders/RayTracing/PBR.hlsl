@@ -8,6 +8,16 @@
 // Include common HLSL code. (For declaration of MaterialData)
 #include "Common.hlsl"
 
+// Surface Info
+struct SurfaceInfo
+{
+    float3 baseColor;
+    float transparent;
+    float metallic;
+    float smoothness;
+    float3 normal;
+};
+
 #define M_E        2.71828182845904523536   // e
 #define M_LOG2E    1.44269504088896340736   // log2(e)
 #define M_LOG10E   0.434294481903251827651  // log10(e)
@@ -175,24 +185,15 @@ float3 BRDF(const float3 diffColor, const float3 specColor, const float smoothne
 	else return diffuseTerm * nl * diffColor + specularTerm * FresnelTerm(specColor, lh);
 }
 
-float3 PBR(const MaterialData matData, const float3 lightDir,
-	const float3 normal, const float3 viewDir, const uint type)
+float3 PBR(const SurfaceInfo IN, const float3 lightDir, const float3 viewDir, const uint type)
 {
-	float4 diffuseAlbedo = matData.Albedo;
-	float smoothness = matData.Smoothness;
-	float metallic = matData.Metallic;
-	
-	//uint diffuseTexIndex = matData.DiffuseMapIndex;
-	//// Dynamically look up the texture in the array.
-	//diffuseAlbedo *= gDiffuseMap[diffuseTexIndex].Sample(gsamAnisotropicWrap, TexC);
-
 	float3 factor;
 
 	float oneMinusReflectivity;
 	float3 baseColor, specColor;
-	baseColor = DiffuseAndSpecularFromMetallic(diffuseAlbedo.rgb, metallic, /*ref*/specColor, /*ref*/oneMinusReflectivity);
+    baseColor = DiffuseAndSpecularFromMetallic(IN.baseColor, IN.metallic, /*ref*/specColor, /*ref*/oneMinusReflectivity);
 
-	factor = BRDF(baseColor, specColor, smoothness, normal, viewDir, lightDir, type);
+	factor = BRDF(baseColor, specColor, IN.smoothness, IN.normal, viewDir, lightDir, type);
 
 	return factor;
 }

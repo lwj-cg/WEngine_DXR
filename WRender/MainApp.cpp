@@ -113,15 +113,7 @@ private:
 	void UpdateMaterialBuffer(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
 
-	void LoadTextures();
-	void BuildPathTracingRootSignature();
-	void BuildDescriptorHeaps();
-	void BuildShaders();
-	void BuildShapeGeometry();
-	void BuildPSOs();
 	void BuildFrameResources();
-	void BuildGeometryMaterials();
-	void BuildRenderItems();
 
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 
@@ -337,14 +329,6 @@ bool MainApp::Initialize()
 	mPathTracer = std::make_unique<PathTracer>(md3dDevice.Get(),
 		mClientWidth, mClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
 
-	LoadTextures();
-	BuildPathTracingRootSignature();
-	BuildDescriptorHeaps();
-	BuildShaders();
-	BuildShapeGeometry();
-	BuildGeometryMaterials();
-	BuildPSOs();
-
 	// Setup scene with XML description file
 	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
 	BuildFrameResources();
@@ -434,75 +418,11 @@ void MainApp::Update(const GameTimer& gt)
 
 void MainApp::Draw(const GameTimer& gt)
 {
-	if (mRaster) DrawForRasterize(gt);
-	else DrawForRayTracing(gt);
+	DrawForRayTracing(gt);
 }
 
 void MainApp::DrawForRasterize(const GameTimer& gt)
 {
-	auto cmdListAlloc = mCurrFrameResource->CmdListAlloc;
-
-	// Reuse the memory associated with command recording.
-	// We can only reset when the associated command lists have finished execution on the GPU.
-	ThrowIfFailed(cmdListAlloc->Reset());
-
-	// A command list can be reset after it has been added to the command queue via ExecuteCommandList.
-	// Reusing the command list reuses memory.
-	ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque"].Get()));
-
-	mCommandList->RSSetViewports(1, &mScreenViewport);
-	mCommandList->RSSetScissorRects(1, &mScissorRect);
-
-	// Indicate a state transition on the resource usage.
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
-
-	// Clear the back buffer and depth buffer.
-	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.bgColor, 0, nullptr);
-	mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-
-	// Specify the buffers we are going to render to.
-	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
-
-	ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvSrvUavDescriptorHeap.Get() };
-	mCommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-
-	auto passCB = mCurrFrameResource->PassCB->Resource();
-
-	mPathTracer->Execute(mCommandList.Get(), mPathTracingRootSignature.Get(),
-		mPSOs["PathTracing"].Get(), CurrentBackBuffer(), passCB, mGeometryMaterialBuffer, mInputSphereBuffer, mInputPlaneBuffer);
-
-	// Prepare to copy output of path tracer to the back buffer.
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
-
-	mCommandList->CopyResource(CurrentBackBuffer(), mPathTracer->Output());
-
-	// Transition to PRESENT state.
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
-
-	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials, mTextures);
-
-	// Done recording commands.
-	ThrowIfFailed(mCommandList->Close());
-
-	// Add the command list to the queue for execution.
-	ID3D12CommandList* cmdsLists[] = { mCommandList.Get() };
-	mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
-
-	// Swap the back and front buffers
-	ThrowIfFailed(mSwapChain->Present(0, 0));
-	mCurrBackBuffer = (mCurrBackBuffer + 1) % SwapChainBufferCount;
-
-	// Advance the fence value to mark commands up to this fence point.
-	mCurrFrameResource->Fence = ++mCurrentFence;
-
-	// Add an instruction to the command queue to set a new fence point. 
-	// Because we are on the GPU timeline, the new fence point won't be 
-	// set until the GPU finishes processing all the commands prior to this Signal().
-	mCommandQueue->Signal(mFence.Get(), mCurrentFence);
-
 }
 
 void MainApp::DrawForRayTracing(const GameTimer& gt)
@@ -654,6 +574,14 @@ void MainApp::OnMouseMove(WPARAM btnState, int x, int y)
 		mCamera.Pitch(dy);
 		mCamera.RotateY(dx);
 	}
+	if ((btnState & MK_RBUTTON) != 0 && !io.WantCaptureMouse)
+	{
+		// Make each pixel correspond to 0.2 unit in the scene.
+		float dx = 0.05f * static_cast<float>(x - mLastMousePos.x);
+		float dy = 0.05f * static_cast<float>(y - mLastMousePos.y);
+
+		mCamera.Walk(2.0f * (dx-dy));
+	}
 
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -719,8 +647,6 @@ void MainApp::UpdateObjectCBs(const GameTimer& gt)
 				normalOffset,
 				texCoordOffset
 			);
-			objConstants.HaveNormal = r.HaveNormal;
-			objConstants.HaveTexCoord = r.HaveTexCoord;
 
 			currObjectBuffer->CopyData(r.objIdx, objConstants);
 
@@ -780,132 +706,6 @@ void MainApp::UpdateMainPassCB(const GameTimer& gt)
 	currPassCB->CopyData(0, mPassCB);
 }
 
-void MainApp::LoadTextures()
-{
-}
-
-void MainApp::BuildPathTracingRootSignature()
-{
-	CD3DX12_DESCRIPTOR_RANGE uavTable;
-	uavTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
-
-	// Root parameter can be a table, root descriptor or root constants.
-	CD3DX12_ROOT_PARAMETER slotRootParameter[5];
-
-	// Perfomance TIP: Order from most frequent to least frequent.
-	slotRootParameter[0].InitAsConstantBufferView(0);    // passCB : b0
-	slotRootParameter[1].InitAsShaderResourceView(0, 1);  // mMaterial   : t0, space1
-	slotRootParameter[2].InitAsShaderResourceView(1, 1);  // mSphereList : t1, space1
-	slotRootParameter[3].InitAsShaderResourceView(2, 1);  // mPlaneList  : t2, space1
-	slotRootParameter[4].InitAsDescriptorTable(1, &uavTable);  // outputBuffer : u0
-
-	// A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter,
-		0, nullptr,
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
-	ComPtr<ID3DBlob> serializedRootSig = nullptr;
-	ComPtr<ID3DBlob> errorBlob = nullptr;
-	HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-		serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
-
-	if (errorBlob != nullptr)
-	{
-		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-	}
-	ThrowIfFailed(hr);
-
-	ThrowIfFailed(md3dDevice->CreateRootSignature(
-		0,
-		serializedRootSig->GetBufferPointer(),
-		serializedRootSig->GetBufferSize(),
-		IID_PPV_ARGS(mPathTracingRootSignature.GetAddressOf())));
-}
-
-void MainApp::BuildDescriptorHeaps()
-{
-
-	//
-	// Create the SRV heap.
-	//
-	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-	srvHeapDesc.NumDescriptors = 2;
-	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mCbvSrvUavDescriptorHeap)));
-
-	//
-	// Fill out the heap with the descriptors to the BlurFilter resources.
-	//
-
-	mPathTracer->BuildDescriptors(
-		CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart()),
-		CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart()),
-		mCbvSrvUavDescriptorSize);
-}
-
-void MainApp::BuildShaders()
-{
-	mShaders["pathTracingCS"] = d3dUtil::CompileShader(L"Shaders\\PathTracing.hlsl", nullptr, "PathTracingCS", "cs_5_1");
-}
-
-void MainApp::BuildShapeGeometry()
-{
-	mSphereItems = {
-		//Sphere(1e5, Vec(1e5 + 1,40.8,-81.6)   ,0),  //Left red
-		//Sphere(1e5, Vec(-1e5 + 99,40.8,-81.6) ,1),  //Rght blue
-		//Sphere(1e5, Vec(50,40.8, 1e5)        ,2),  //Back 
-		//Sphere(1e5, Vec(50,40.8,-1e5 + 170)  ,3),  //Frnt 
-		//Sphere(1e5, Vec(50, 1e5, -81.6)       ,4),  //Botm 
-		//Sphere(1e5, Vec(50,-1e5 + 81.6,-81.6) ,5),  //Top 
-		Sphere(16.5,Vec(27,16.5,-47)          ,6),  //Mirr 
-		Sphere(16.5,Vec(73,16.5,-78)          ,7),  //Glas 
-		Sphere(600, Vec(50,681.6 - .27,-81.6) ,8)  //Lite 
-	};
-	mPlaneItems = {
-		Plane(Vec(1,0,0),Vec(1,40.8,-81.6),0),  //Left red
-		Plane(Vec(-1,0,0),Vec(99,40.8,-81.6),1), //Rght blue
-		Plane(Vec(0,0,-1),Vec(50,40.8,0),2),      //Back
-		Plane(Vec(0,1,0),Vec(50,0,-81.6),4),     //Botm
-		Plane(Vec(0,-1,0),Vec(50,81.6,-81.6),5)     //Top
-	};
-
-	UINT64 sphereByteSize = mSphereItems.size() * sizeof(Sphere);
-	UINT64 planeByteSize = mPlaneItems.size() * sizeof(Plane);
-
-	// Create some buffers to be used as SRVs.
-	mInputSphereBuffer = d3dUtil::CreateDefaultBuffer(
-		md3dDevice.Get(),
-		mCommandList.Get(),
-		mSphereItems.data(),
-		sphereByteSize,
-		mInputSphereUploadBuffer);
-
-	mInputPlaneBuffer = d3dUtil::CreateDefaultBuffer(
-		md3dDevice.Get(),
-		mCommandList.Get(),
-		mPlaneItems.data(),
-		planeByteSize,
-		mInputPlaneUploadBuffer);
-}
-
-void MainApp::BuildPSOs()
-{
-	//
-	// PSO for path tracing
-	//
-	D3D12_COMPUTE_PIPELINE_STATE_DESC ptPSO = {};
-	ptPSO.pRootSignature = mPathTracingRootSignature.Get();
-	ptPSO.CS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["pathTracingCS"]->GetBufferPointer()),
-		mShaders["pathTracingCS"]->GetBufferSize()
-	};
-	ptPSO.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&ptPSO, IID_PPV_ARGS(&mPSOs["PathTracing"])));
-}
-
 void MainApp::BuildFrameResources()
 {
 	for (int i = 0; i < gNumFrameResources; ++i)
@@ -913,35 +713,6 @@ void MainApp::BuildFrameResources()
 		mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
 			1, (UINT)mRenderItems.size(), (UINT)mMaterials.size()));
 	}
-}
-
-void MainApp::BuildGeometryMaterials()
-{
-	mGeometryMaterials = {
-		PureGeometryMaterial(Vec(.75,.25,.25),0), //Left
-		PureGeometryMaterial(Vec(.25,.25,.75),0), //Right
-		PureGeometryMaterial(Vec(.75,.75,.75),0), //Back 
-		PureGeometryMaterial(Vec(0.0,0.0,0.0),0), //Frnt
-		PureGeometryMaterial(Vec(.75,.75,.75),0), //Botm
-		PureGeometryMaterial(Vec(.75,.75,.75),0), //Top
-		PureGeometryMaterial(Vec(.999,.999,.999),1), //Mirror
-		PureGeometryMaterial(Vec(.999,.999,.999),2), //Glass
-		PureGeometryMaterial(Vec(0.0,0.0,0.0),0,Vec(12,12,12)) //Light
-	};
-
-	UINT64 materialBufferByteSize = mGeometryMaterials.size() * sizeof(PureGeometryMaterial);
-
-	// Create some buffers to be used as SRVs.
-	mGeometryMaterialBuffer = d3dUtil::CreateDefaultBuffer(
-		md3dDevice.Get(),
-		mCommandList.Get(),
-		mGeometryMaterials.data(),
-		materialBufferByteSize,
-		mGeometryMaterialUploadBuffer);
-}
-
-void MainApp::BuildRenderItems()
-{
 }
 
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> MainApp::GetStaticSamplers()
