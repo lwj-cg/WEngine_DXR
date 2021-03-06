@@ -3,12 +3,13 @@
 #include "Helpers.hlsl"
 #include "Random.hlsl"
 #include "HitCommon.hlsl"
+#include "Sampling.hlsl"
 
 [shader("closesthit")]
 void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
 {
     // Some global configurations
-    uint max_depth = 8;
+    uint max_depth = 16;
     uint camera_static_frames = 1;
     float refraction_index = 1.5f;
     float scene_epsilon = 0.001f;
@@ -61,11 +62,10 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     float z1 = rnd(current_payload.seed);
     float z2 = rnd(current_payload.seed);
     
-    
     if (any(matData.Emission))
     {
         current_payload.done = true;
-        current_payload.radiance += current_payload.countEmitted ? matData.Emission : (float3) 0;
+        current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
         return;
     }
     
@@ -112,28 +112,37 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
             float3 p;
 
             if (z1 < refr_diff_refl.x)
-            { //透射部分
+            { 
+                // Transparent
                 float pd;
                 float3 n;
                 ImportanceSampleGGX(float2(z1, z2), matData.Smoothness, n, pd);
                 inverse_transform_with_onb(n, onb);
 
-                if (refract(ray_direction, n, in_to_out ? refraction_index : 1.0f / refraction_index, p))
+                //if (refract(ray_direction, n, in_to_out ? refraction_index : 1.0f / refraction_index, p))
+                //{
+                //    attenuationFactor *= baseColor / max_diffuse;
+                //    current_payload.direction = p;
+                //}
+                bool isRefract = refract(ray_direction, n, in_to_out ? refraction_index : 1.0f / refraction_index, p);
+                if (isRefract && dot(ffnormal,p)<0)
                 {
                     attenuationFactor *= baseColor / max_diffuse;
                     current_payload.direction = p;
                 }
             }
             else if (z1 < refr_diff_refl.y)
-            { //漫射部分
-                uniform_sample_hemisphere(z1, z2, p);
+            { 
+                // Diffuse
+                CosineSampleHemisphere(float2(z1, z2), p);
                 inverse_transform_with_onb(p, onb);
                 
                 attenuationFactor *= PBR(IN, p, -ray_direction, 0) / max_diffuse;
                 current_payload.direction = p;
             }
             else
-            { // 反射部分
+            { 
+                // Specular
                 float pd;
                 float3 n;
                 ImportanceSampleGGX(float2(z1, z2), matData.Smoothness, n, pd);

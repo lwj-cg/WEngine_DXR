@@ -34,8 +34,9 @@ void RayGen()
 {
 	// Global variables
     int gSqrtSamples = 2;
-    int gMaxDepth = 8;
+    int gMaxDepth = 16;
     int rr_begin_depth = 1;
+    float scene_epsilon = 0.01;
 
 	// Get the location within the dispatched 2D grid of work items
 	// (often maps to pixels, so this could represent a pixel coordinate).
@@ -79,7 +80,7 @@ void RayGen()
         for (int i = 0; i < gMaxDepth; ++i)
         //for (;;)
         {
-            RayDesc ray = make_Ray(origin, direction);
+            RayDesc ray = make_Ray(origin, direction, scene_epsilon);
             // Trace the ray (Hit group 0 : default, Miss 0 : common miss)
             TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
@@ -90,14 +91,14 @@ void RayGen()
                 break;
             }
 
-            // Russian roulette termination 
-            if (payload.depth >= rr_begin_depth)
-            {
-                float pcont = max(max(payload.attenuation.x, payload.attenuation.y), payload.attenuation.z);
-                if (rnd(payload.seed) >= pcont)
-                    break;
-                payload.attenuation /= pcont;
-            }
+            //// Russian roulette termination 
+            //if (payload.depth >= rr_begin_depth)
+            //{
+            //    float pcont = max(max(payload.attenuation.x, payload.attenuation.y), payload.attenuation.z);
+            //    if (rnd(payload.seed) >= pcont)
+            //        break;
+            //    payload.attenuation /= pcont;
+            //}
 
             payload.depth++;
             radiance += payload.radiance * payload.attenuation;

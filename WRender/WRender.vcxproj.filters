@@ -225,5 +225,8 @@
     <FxCompile Include="Shaders\RayTracing\RayGen.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Sampling.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

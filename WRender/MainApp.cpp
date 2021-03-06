@@ -880,9 +880,14 @@ void MainApp::CreateTopLevelAS(
 	{
 	// Gather all the instances into the builder helper
 	for (size_t i = 0; i < instances.size(); i++) {
-		mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-			instances[i].second, static_cast<UINT>(i),
-			static_cast<UINT>(0));
+		if (i==0)
+			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+				instances[i].second, static_cast<UINT>(i),
+				static_cast<UINT>(1));
+		else
+			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+				instances[i].second, static_cast<UINT>(i),
+				static_cast<UINT>(0));
 	}
 
 		// As for the bottom-level AS, the building the AS requires some scratch space

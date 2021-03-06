@@ -19,14 +19,14 @@ void AnyHit_Shadow(inout RayPayload_shadow payload, Attributes attr)
     // Modify the val of inShadow
     float transparent = matData.Transparent;
     float3 emission = matData.Emission;
-    if (transparent > 0)
-    {
-        payload.inShadow *= 0.8 * transparent;
-        IgnoreHit();
-    }
-    else
-    {
+    //if (transparent > 0)
+    //{
+    //    payload.inShadow *= 0.8 * transparent;
+    //    IgnoreHit();
+    //}
+    //else
+    //{
         payload.inShadow = 0;
         AcceptHitAndEndSearch();
-    }
+    //}
 }

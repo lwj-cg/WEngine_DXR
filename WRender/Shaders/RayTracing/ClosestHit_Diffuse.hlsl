@@ -3,6 +3,7 @@
 #include "Helpers.hlsl"
 #include "Random.hlsl"
 #include "HitCommon.hlsl"
+#include "Sampling.hlsl"
 
 [shader("closesthit")]
 void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
@@ -46,15 +47,15 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
     float3 ray_direction = normalize(WorldRayDirection());
     float3 ffnormal;
     int normalMapIdx = matData.NormalMapIdx;
-    if (normalMapIdx >= 0)
-    {
-        float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
-        ffnormal = faceforward(shading_normal, -ray_direction);
-    }
-    else
-    {
+    //if (normalMapIdx >= 0)
+    //{
+    //    float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
+    //    ffnormal = faceforward(shading_normal, -ray_direction);
+    //}
+    //else
+    //{
         ffnormal = faceforward(world_geometric_normal, -ray_direction);
-    }
+    //}
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     current_payload.origin = hitpoint;
@@ -62,14 +63,15 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
     float z1 = rnd(current_payload.seed);
     float z2 = rnd(current_payload.seed);
     float3 p;
-    uniform_sample_hemisphere(z1, z2, p);
+    CosineSampleHemisphere(float2(z1, z2), p);
     Onb onb;
     create_onb(ffnormal, onb);
     inverse_transform_with_onb(p, onb);
     current_payload.direction = p;
     
     int diffuseMapIdx = matData.DiffuseMapIdx;
-    float3 diffuse_color = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamLinearWrap, uv, 0).rgb : matData.Albedo.rgb;
+    //float3 diffuse_color = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamLinearWrap, uv, 0).rgb : matData.Albedo.rgb;
+    float3 diffuse_color = matData.Albedo.rgb;
     
     if (any(matData.Emission))
     {
