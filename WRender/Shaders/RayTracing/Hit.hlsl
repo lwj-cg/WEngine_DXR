@@ -41,6 +41,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     // Fetch Material Data
     uint matIdx = objectData.MatIdx;
     MaterialData matData = gMaterialBuffer[matIdx];
+    // Calculate Normal
     float3 geometric_normal = normalize(cross(v1 - v0, v2 - v0));
     float4x4 inverseTranspose = objectData.InverseTranspose;
     float3 world_geometric_normal = mul(geometric_normal, (float3x3) inverseTranspose);
@@ -62,12 +63,12 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     float z1 = rnd(current_payload.seed);
     float z2 = rnd(current_payload.seed);
     
-    if (any(matData.Emission))
-    {
-        current_payload.done = true;
-        current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
-        return;
-    }
+    //if (any(matData.Emission))
+    //{
+    //    current_payload.done = true;
+    //    current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
+    //    return;
+    //}
     
     int diffuseMapIdx = matData.DiffuseMapIdx;
     float3 albedo = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb : matData.Albedo.rgb;
@@ -160,7 +161,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
             //current_payload.attenuation *= sum_w;
         }
     }
-    current_payload.attenuation *= attenuationFactor;
+    current_payload.attenuation = attenuationFactor;
 
     float3 result = float3(0.0f, 0.0f, 0.0f);
     for (int i = 0; i < gNumLights; ++i)
@@ -201,9 +202,8 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
             }
         }
     }
-    //current_payload.radiance = result / attenuationFactor;
     current_payload.radiance = result;
-    
+    current_payload.specularBounce = false;
 }
 
 

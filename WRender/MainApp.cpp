@@ -206,6 +206,7 @@ private:
 	ComPtr<IDxcBlob> m_hitDiffuseLibrary;
 	ComPtr<IDxcBlob> m_missLibrary;
 	ComPtr<IDxcBlob> m_hitShadowLibrary;
+	ComPtr<IDxcBlob> m_hitSpecularLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
@@ -671,6 +672,8 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 				m.Albedo, m.Emission, m.Transparent, m.Smoothness, m.Metallic,
 				m.DiffuseMapIdx, m.NormalMapIdx
 			);
+			materialData.TransColor = m.TransColor;
+			materialData.F0 = m.F0;
 
 			currMaterialBuffer->CopyData(m.MatIdx, materialData);
 
@@ -863,6 +866,18 @@ MainApp::CreateBottomLevelAS(
 	}
 }
 
+WRenderItem findRenderItem(const std::map < std::string, WRenderItem > renderItems, int objIdx)
+{
+	for (const auto& ritem : renderItems)
+	{
+		if (objIdx == ritem.second.objIdx)
+		{
+			return ritem.second;
+		}
+	}
+	return WRenderItem();
+}
+
 //-----------------------------------------------------------------------------
 // Create the main acceleration structure that holds all instances of the scene.
 // Similarly to the bottom-level AS generation, it is done in 3 steps: gathering
@@ -880,10 +895,17 @@ void MainApp::CreateTopLevelAS(
 	{
 	// Gather all the instances into the builder helper
 	for (size_t i = 0; i < instances.size(); i++) {
-		if (i==0)
+		const auto& ritem = findRenderItem(mRenderItems, i);
+		const auto& material = mMaterials[ritem.materialName];
+		const auto& Shader = material.Shader;
+		if (Shader=="SpecularReflection")
 			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 				instances[i].second, static_cast<UINT>(i),
-				static_cast<UINT>(1));
+				static_cast<UINT>(2*1));
+		else if (Shader=="SpecularTransmission")
+			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+				instances[i].second, static_cast<UINT>(i),
+				static_cast<UINT>(2*2));
 		else
 			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 				instances[i].second, static_cast<UINT>(i),
@@ -1034,6 +1056,7 @@ void MainApp::CreateRayTracingPipeline()
 	m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
 	m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
 	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_Shadow.hlsl");
+	m_hitSpecularLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_SpecularBxDF.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1045,6 +1068,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss_Shadow" });
 	pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit_Default" });
 	pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
+	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_SpecularReflection" });
+	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_SpecularTransmission" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
@@ -1066,6 +1091,8 @@ void MainApp::CreateRayTracingPipeline()
 	// together into a hit group.
 	pipeline.AddHitGroup(L"HitGroup_Default", L"ClosestHit_Default");
 	pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
+	pipeline.AddHitGroup(L"HitGroup_SpecularReflection", L"ClosestHit_SpecularReflection");
+	pipeline.AddHitGroup(L"HitGroup_SpecularTransmission", L"ClosestHit_SpecularTransmission");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
@@ -1075,6 +1102,8 @@ void MainApp::CreateRayTracingPipeline()
 	// closest-hit shaders share the same root signature.
 	pipeline.AddRootSignatureAssociation(m_rayGenSignature.Get(), { L"RayGen" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_Default" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_SpecularReflection" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_SpecularTransmission" });
 	pipeline.AddRootSignatureAssociation(m_hitDiffuseSignature.Get(), { L"HitGroup_Diffuse" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
@@ -1085,7 +1114,7 @@ void MainApp::CreateRayTracingPipeline()
 	// exchanged between shaders, such as the HitInfo structure in the HLSL code.
 	// It is important to keep this value as low as possible as a too high value
 	// would result in unnecessary memory consumption and cache trashing.
-	pipeline.SetMaxPayloadSize(16 * sizeof(float));
+	pipeline.SetMaxPayloadSize(19 * sizeof(float));
 
 	// Upon hitting a surface, DXR can provide several attributes to the hit. In
 	// our sample we just use the barycentric coordinates defined by the weights
@@ -1305,7 +1334,30 @@ void MainApp::CreateShaderBindingTable() {
 			lightBufferPointer,
 			heapPointer
 		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Diffuse",
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_SpecularReflection",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_SpecularTransmission",
 		{
 			objectBufferPointer,
 			materialBufferPointer,

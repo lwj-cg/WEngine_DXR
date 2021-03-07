@@ -195,6 +195,9 @@
     </Xml>
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="Shaders\RayTracing\BSDFCommon.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\ClosestHit_Diffuse.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -207,10 +210,22 @@
     <FxCompile Include="Shaders\RayTracing\Hit.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_MicrofacetBxDF.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Hit_Shadow.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_SpecularBxDF.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\HitCommon.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Intersection.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Light.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Miss.hlsl">

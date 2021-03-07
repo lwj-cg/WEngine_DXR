@@ -11,10 +11,11 @@ struct RayPayload
     float3 origin;
     float3 direction;
     float3 attenuation;
+    float3 emission;
 	uint seed;
 	uint depth;
     bool done;
-    bool countEmitted;
+    bool specularBounce;
 };
 
 struct RayPayload_shadow
@@ -43,7 +44,9 @@ struct ObjectConstants
 struct MaterialData
 {
 	float4 Albedo;
+    float4 TransColor;
     float3 Emission;
+    float3 F0;
     float Transparent;
     float Smoothness;
     float Metallic;
@@ -79,5 +82,48 @@ struct TexCoord
 {
     float2 uv;
 };
+
+// Surface Info
+struct SurfaceInfo
+{
+    float3 baseColor;
+    float transparent;
+    float metallic;
+    float smoothness;
+    float3 normal;
+    float3 p;
+};
+
+struct SurfaceInteraction
+{
+    float alphax;
+    float alphay;
+    float etaA;
+    float etaB;
+    float3 F0;
+    float3 baseColor;
+    float3 transColor;
+    float3 p;
+    float3 wo; /* from isect */
+    float3 n;
+};
+
+typedef float3 Spectrum;
+
+inline float AbsDot(float3 v1, float3 v2)
+{
+    return abs(dot(v1, v2));
+}
+
+inline bool SameHemisphere(float3 w, float3 wp)
+{
+    return w.z * wp.z > 0;
+}
+
+inline float MaxComponentValue(float3 v)
+{
+    return max(max(v.x, v.y), v.z);
+
+}
 
 #endif

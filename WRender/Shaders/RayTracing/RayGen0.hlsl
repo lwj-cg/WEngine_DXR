@@ -35,7 +35,7 @@ void RayGen()
 	// Global variables
     int gSqrtSamples = 2;
     int gMaxDepth = 16;
-    int rr_begin_depth = 3;
+    int rr_begin_depth = 1;
     float scene_epsilon = 0.01;
 
 	// Get the location within the dispatched 2D grid of work items
@@ -71,52 +71,45 @@ void RayGen()
         payload.depth = 0;
         payload.seed = seed;
         payload.done = false;
-        payload.specularBounce = false;
+        payload.countEmitted = true;
 
 		// Trace the ray (Hit group 1 : only diffuse)
 		// Each iteration is a segment of the ray path.  The closest hit will
         // return new segments to be traced here.
-        float3 L = float3(0, 0, 0);
-        float3 beta = float3(1, 1, 1);
-        bool specularBounce = false;
-        for (int i = 0;; ++i)
+        float3 radiance = float3(0, 0, 0);
+        for (int i = 0; i < gMaxDepth; ++i)
+        //for (;;)
         {
             RayDesc ray = make_Ray(origin, direction, scene_epsilon);
             // Trace the ray (Hit group 0 : default, Miss 0 : common miss)
             TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
-            if (i == 0 || specularBounce)
+            if (payload.done)
             {
                 // We have hit the background or a luminaire
-                L += beta * payload.emission;
-            }
-            
-            // Terminate path if ray escaped or _maxDepth_ was reached
-            if (payload.done || i >= gMaxDepth)
+                radiance += payload.radiance * payload.attenuation;
                 break;
+            }
 
-            float3 Ld = beta * payload.radiance;
-            L += Ld;
+            //// Russian roulette termination 
+            //if (payload.depth >= rr_begin_depth)
+            //{
+            //    float pcont = max(max(payload.attenuation.x, payload.attenuation.y), payload.attenuation.z);
+            //    if (rnd(payload.seed) >= pcont)
+            //        break;
+            //    payload.attenuation /= pcont;
+            //}
+
             payload.depth++;
+            radiance += payload.radiance * payload.attenuation;
+            payload.countEmitted = false;
 
-            // Get new path direction
-            beta *= payload.attenuation;
+            // Update ray data for the next path segment
             origin = payload.origin;
             direction = payload.direction;
-            specularBounce = payload.specularBounce;
-            
-            // Russian roulette termination 
-            float3 rrBeta = beta;
-            if (i > rr_begin_depth)
-            {
-                float q = max(.05f, 1 - MaxComponentValue(rrBeta));
-                if (rnd(payload.seed) < q)
-                    break;
-                beta /= 1-q;
-            }
         }
 
-        color_result += L;
+        color_result += radiance;
         seed = payload.seed;
     }
 

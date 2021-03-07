@@ -47,15 +47,15 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
     float3 ray_direction = normalize(WorldRayDirection());
     float3 ffnormal;
     int normalMapIdx = matData.NormalMapIdx;
-    //if (normalMapIdx >= 0)
-    //{
-    //    float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
-    //    ffnormal = faceforward(shading_normal, -ray_direction);
-    //}
-    //else
-    //{
+    if (normalMapIdx >= 0)
+    {
+        float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
+        ffnormal = faceforward(shading_normal, -ray_direction);
+    }
+    else
+    {
         ffnormal = faceforward(world_geometric_normal, -ray_direction);
-    //}
+    }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     current_payload.origin = hitpoint;
@@ -76,7 +76,6 @@ void ClosestHit_Diffuse(inout RayPayload current_payload, Attributes attrib)
     if (any(matData.Emission))
     {
         current_payload.done = true;
-        current_payload.radiance = current_payload.countEmitted ? matData.Emission : (float3) 0;
         return;
     }
     

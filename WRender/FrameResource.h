@@ -138,7 +138,9 @@ struct RVertex
 struct WMaterialData
 {
 	DirectX::XMFLOAT4 Albedo = { 1.0f, 1.0f, 1.0f, 1.0f };
+	DirectX::XMFLOAT4 TransColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	DirectX::XMFLOAT3 Emission = { 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3 F0 = { 0.5f, 0.5f, 0.5f };
 	float Transparent = 0.0f;
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;
@@ -167,12 +169,15 @@ struct WMaterial
 	std::string Name;
 	std::string DiffuseMapName;
 	std::string NormalMapName;
+	std::string Shader;
 	// Position in material buffer
 	UINT MatIdx;
 
 	// The part of useful data
 	DirectX::XMFLOAT4 Albedo = { 1.0f, 1.0f, 1.0f, 1.0f };
+	DirectX::XMFLOAT4 TransColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	DirectX::XMFLOAT3 Emission = { 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3 F0 = { 0.5f, 0.5f, 0.5f };
 	float Transparent = 0.0f;
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;

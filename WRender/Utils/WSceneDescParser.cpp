@@ -64,12 +64,31 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							DirectX::XMFLOAT4 albedoVal = parseFloat4(albedoElem->GetText());
 							tmpMatData.Albedo = albedoVal;
 						}
+						tinyxml2::XMLElement* transColorElem = materialNode->FirstChildElement("transColor");
+						if (transColorElem)
+						{
+							DirectX::XMFLOAT4 transColorVal = parseFloat4(transColorElem->GetText());
+							tmpMatData.TransColor = transColorVal;
+						}
+						tinyxml2::XMLElement* F0Elem = materialNode->FirstChildElement("F0");
+						if (F0Elem)
+						{
+							DirectX::XMFLOAT3 F0Val = parseFloat3(F0Elem->GetText());
+							tmpMatData.F0 = F0Val;
+						}
 						tinyxml2::XMLElement* emissionElem = materialNode->FirstChildElement("emission");
 						if (emissionElem)
 						{
 							DirectX::XMFLOAT3 emissionVal = parseFloat3(emissionElem->GetText());
 							tmpMatData.Emission = emissionVal;
 						}
+						tinyxml2::XMLElement* ShaderElem = materialNode->FirstChildElement("Shader");
+						if (ShaderElem)
+						{
+							std::string ShaderVal = ShaderElem->GetText();
+							tmpMatData.Shader = ShaderVal;
+						}
+
 						tinyxml2::XMLElement* diffuseMapElem = materialNode->FirstChildElement("diffuseMap");
 						if (diffuseMapElem)
 						{

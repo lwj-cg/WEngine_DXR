@@ -9,6 +9,7 @@ void Miss(inout RayPayload payload)
     //float ramp = launchIndex.y / dims.y;
     //payload.radiance = float3(0.0f, 0.2f, 0.7f - 0.3f * ramp);
     payload.radiance = float3(0.0f, 0.0f, 0.0f);
+    payload.emission = float3(0.0f, 0.0f, 0.0f);
     payload.done = true;
 }
 

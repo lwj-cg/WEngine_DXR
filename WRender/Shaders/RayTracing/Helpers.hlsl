@@ -29,9 +29,33 @@ void create_onb(float3 n, out Onb onb)
     onb.v = cross(onb.w, onb.u);
 }
 
+/* Old API */
+/* Local To World */
 void inverse_transform_with_onb(inout float3 n, Onb onb)
 {
-    n = (n.z * onb.w + n.x * onb.u + n.y * onb.v);
+    n = (n.x * onb.u + n.y * onb.v + n.z * onb.w);
+}
+
+/* World To Local */
+void transfrom_with_onb(inout float3 v, Onb onb)
+{
+    float3 ss = onb.u;
+    float3 ts = onb.v;
+    float3 ns = onb.w;
+    v = float3(dot(ss, v), dot(ts, v), dot(ns, v));
+}
+
+float3 LocalToWorld(float3 v, Onb onb)
+{
+    return v.x * onb.u + v.y * onb.v + v.z * onb.w;
+}
+
+float3 WorldToLocal(float3 v, Onb onb)
+{
+    float3 ss = onb.u;
+    float3 ts = onb.v;
+    float3 ns = onb.w;
+    return float3(dot(ss, v), dot(ts, v), dot(ns, v));
 }
 
 RayDesc make_Ray(float3 origin, float3 direction, float tmin=0.001f, float tmax=100000)
@@ -51,7 +75,7 @@ float3 reflect(float3 l, float3 n)
 }
 
 // refract i with n
-bool refract(float3 i, float3 n, float eta, out float3 t)
+bool refract(float3 i /* to isect */, float3 n, float eta, out float3 t)
 {
     // eta is n1 / n2
     float cosi = dot(-i, n);
@@ -59,6 +83,17 @@ bool refract(float3 i, float3 n, float eta, out float3 t)
     t = eta * i + ((eta * cosi - sqrt(abs(cost2))) * n);
     t = t * (float3) (cost2 > 0);
     return cost2 > 0;
+}
+
+inline bool isBlack(float3 L)
+{
+    return all(L <= (float3) 0.0f);
+}
+
+inline float PowerHeuristic(int nf, float fPdf, int ng, float gPdf)
+{
+    float f = nf * fPdf, g = ng * gPdf;
+    return (f * f) / (f * f + g * g);
 }
 
 #endif

@@ -9,16 +9,6 @@
 #include "Common.hlsl"
 #include "Sampling.hlsl"
 
-// Surface Info
-struct SurfaceInfo
-{
-    float3 baseColor;
-    float transparent;
-    float metallic;
-    float smoothness;
-    float3 normal;
-};
-
 inline float Pow4(float x)
 {
 	return x * x * x * x;
