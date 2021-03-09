@@ -19,6 +19,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     uint vertId = 3 * PrimitiveIndex() + objectData.IndexOffset;
     uint vertOffset = objectData.VertexOffset;
     int texCoordOffset = objectData.TexCoordOffset;
+    int normalOffset = objectData.NormalOffset;
     float3 v0 = gVertexBuffer[vertOffset + gIndexBuffer[vertId]].pos;
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
@@ -49,14 +50,20 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
     float3 ray_direction = normalize(WorldRayDirection());
     float3 ffnormal;
     int normalMapIdx = matData.NormalMapIdx;
-    if (normalMapIdx>=0)
+    if (normalMapIdx >= 0)
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
-        ffnormal = faceforward(shading_normal, -ray_direction);
+        float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
+        ffnormal = faceforward(world_shading_normal, -ray_direction);
     }
     else
     {
-        ffnormal = faceforward(world_geometric_normal, -ray_direction);
+        float3 normal0 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId]].normal;
+        float3 normal1 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 1]].normal;
+        float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
+        float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
+        float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
+        ffnormal = faceforward(world_shading_normal, -ray_direction);
     }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();

@@ -30,16 +30,6 @@ struct WObjectConstants
 	};
 };
 
-struct ObjectConstants
-{
-	DirectX::XMFLOAT4X4 World = MathHelper::Identity4x4();
-	DirectX::XMFLOAT4X4 TexTransform = MathHelper::Identity4x4();
-	UINT     MaterialIndex;
-	UINT     ObjPad0;
-	UINT     ObjPad1;
-	UINT     ObjPad2;
-};
-
 struct WPassConstants
 {
 	DirectX::XMFLOAT4X4 View = MathHelper::Identity4x4();
@@ -49,36 +39,11 @@ struct WPassConstants
 	DirectX::XMFLOAT4X4 ViewProj = MathHelper::Identity4x4();
 	DirectX::XMFLOAT4X4 InvViewProj = MathHelper::Identity4x4();
 	DirectX::XMFLOAT3 EyePosW = { 0.0f, 0.0f, 0.0f };
-	float PassPad0 = 0.0f;
+	float SceneEpsilon = 0.01f;
 	DirectX::XMFLOAT4 bgColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 	UINT NumStaticFrame = 1;
-	UINT intPad0 = 0;
-	UINT intPad1 = 0;
-	UINT intPad2 = 0;
-};
-
-struct PassConstants
-{
-	DirectX::XMFLOAT4X4 View = MathHelper::Identity4x4();
-	DirectX::XMFLOAT4X4 InvView = MathHelper::Identity4x4();
-	DirectX::XMFLOAT4X4 Proj = MathHelper::Identity4x4();
-	DirectX::XMFLOAT4X4 InvProj = MathHelper::Identity4x4();
-	DirectX::XMFLOAT4X4 ViewProj = MathHelper::Identity4x4();
-	DirectX::XMFLOAT4X4 InvViewProj = MathHelper::Identity4x4();
-	DirectX::XMFLOAT3 EyePosW = { 0.0f, 0.0f, 0.0f };
-	float cbPerObjectPad1 = 0.0f;
-	DirectX::XMFLOAT2 RenderTargetSize = { 0.0f, 0.0f };
-	DirectX::XMFLOAT2 InvRenderTargetSize = { 0.0f, 0.0f };
-	float NearZ = 0.0f;
-	float FarZ = 0.0f;
-	float TotalTime = 0.0f;
-	float DeltaTime = 0.0f;
-
-	DirectX::XMFLOAT4 AmbientLight = { 0.0f, 0.0f, 0.0f, 1.0f };
-	DirectX::XMFLOAT4 FogColor = { 0.7f, 0.7f, 0.7f, 1.0f };
-	DirectX::XMFLOAT4 clearColor = { 0.6f, 0.8f, 0.4f, 1.0f };
-	DirectX::XMFLOAT4 bgColor = { 0.0f, 0.0f, 0.0f, 1.0f };
-
+	UINT SqrtSamples = 2;
+	UINT MaxDepth = 16;
 };
 
 struct MaterialData
@@ -144,12 +109,9 @@ struct WMaterialData
 	float Transparent = 0.0f;
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;
-	float MetalPad0;
-	float MetalPad1;
+	float RefractiveIndex = 1.5f;
 	int DiffuseMapIdx = -1;
 	int NormalMapIdx = -1;
-	int MaterialPad0;
-	int MaterialPad1;
 
 	WMaterialData() = default;
 	WMaterialData(DirectX::XMFLOAT4 _Albedo, DirectX::XMFLOAT3 _Emission, float _Transparent,
@@ -181,6 +143,7 @@ struct WMaterial
 	float Transparent = 0.0f;
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;
+	float RefractiveIndex = 1.5f;
 	int DiffuseMapIdx = -1;
 	int NormalMapIdx = -1;
 

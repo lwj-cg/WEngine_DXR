@@ -12,12 +12,11 @@ cbuffer cbPass : register(b0)
     float4x4 gViewProj;
     float4x4 gInvViewProj;
     float3 gEyePosW;
-    float PassPad0;
+    float gSceneEpsilon;
     float4 gBackColor;
     uint gNumStaticFrame;
-    uint intPad0;
-    uint intPad1;
-    uint intPad2;
+    uint gSqrtSamples;
+    uint gMaxDepth;
 };
 
 StructuredBuffer<ObjectConstants> gObjectBuffer : register(t0, space1);
@@ -33,28 +32,28 @@ RaytracingAccelerationStructure SceneBVH : register(t0);
 void RayGen()
 {
 	// Global variables
-    int gSqrtSamples = 2;
-    int gMaxDepth = 16;
+    uint num_sqrt_samples = gSqrtSamples;
+    uint max_depth = gMaxDepth;
+    float scene_epsilon = gSceneEpsilon;
     int rr_begin_depth = 3;
-    float scene_epsilon = 0.01;
 
 	// Get the location within the dispatched 2D grid of work items
 	// (often maps to pixels, so this could represent a pixel coordinate).
     uint2 launchIndex = DispatchRaysIndex().xy;
     float2 dims = float2(DispatchRaysDimensions().xy);
     float2 inv_screen = 1.0f / dims * 2.0f;
-    float2 jitter_scale = inv_screen / gSqrtSamples;
-    uint samples_per_pixel = gSqrtSamples * gSqrtSamples;
+    float2 jitter_scale = inv_screen / num_sqrt_samples;
+    uint samples_per_pixel = num_sqrt_samples * num_sqrt_samples;
     uint pixel_id = (launchIndex.y * dims.x + launchIndex.x) * (samples_per_pixel + 1);
     float2 pixel = launchIndex * inv_screen - 1.0f;
     float3 color_result = float3(0.0f, 0.0f, 0.0f);
     uint camera_static_frames = gNumStaticFrame;
-    uint seed = tea16(pixel_id+47, camera_static_frames);
+    uint seed = tea16(pixel_id, camera_static_frames);
     //float z = rnd(seed);
     for (uint samples_index = 0; samples_index < samples_per_pixel; ++samples_index)
     {
-        uint x = samples_index % gSqrtSamples;
-        uint y = samples_index / gSqrtSamples;
+        uint x = samples_index % num_sqrt_samples;
+        uint y = samples_index / num_sqrt_samples;
         float2 jitter = float2(x - rnd(seed), y - rnd(seed));
         float2 d = pixel + jitter * jitter_scale;
 		// 观察空间到世界空间变换
@@ -92,7 +91,7 @@ void RayGen()
             }
             
             // Terminate path if ray escaped or _maxDepth_ was reached
-            if (payload.done || i >= gMaxDepth)
+            if (payload.done || i >= max_depth)
                 break;
 
             float3 Ld = beta * payload.radiance;

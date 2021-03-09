@@ -147,9 +147,9 @@ float3 MicrofacetReflection_f(float3 wo /* from intr */, float3 wi /* to light *
     float3 wh = wi + wo;
     // Handle degenerate cases for microfacet reflection
     if (cosThetaI == 0 || cosThetaO == 0)
-        return float3(0.);
+        return (float3) (0.);
     if (wh.x == 0 && wh.y == 0 && wh.z == 0)
-        return float3(0.);
+        return (float3) (0.);
     wh = normalize(wh);
     // For the Fresnel call, make sure that wh is in the same hemisphere
     // as the surface normal, so that TIR is handled correctly.
@@ -178,39 +178,11 @@ float3 MicrofacetReflection_Samplef(const float3 wo, out float3 wi,
         return 0.; // Should be rare
     wi = reflect(wo, wh);
     if (!SameHemisphere(wo,  wi))
-        return float3(0.f);
+        return (float3) (0.f);
 
     // Compute PDF of _wi_ for microfacet reflection
     pdf = Pdf(wo, wh, alphax, alphax) / (4 * dot(wo, wh));
     return MicrofacetReflection_f(wo, wi, F0, alphax, alphay, R);
-}
-
-float3 FrDielectric(float cosThetaI, float etaI, float etaT)
-{
-    cosThetaI = clamp(cosThetaI, -1, 1);
-    // Potentially swap indices of refraction
-    bool entering = cosThetaI > 0.f;
-    if (!entering)
-    {
-        float tmp = etaI;
-        etaI = etaT;
-        etaT = tmp;
-        cosThetaI = abs(cosThetaI);
-    }
-
-    // Compute _cosThetaT_ using Snell's law
-    float sinThetaI = sqrt(max((float) 0, 1 - cosThetaI * cosThetaI));
-    float sinThetaT = etaI / etaT * sinThetaI;
-
-    // Handle total internal reflection
-    if (sinThetaT >= 1)
-        return 1;
-    float cosThetaT = sqrt(max((float) 0, 1 - sinThetaT * sinThetaT));
-    float Rparl = ((etaT * cosThetaI) - (etaI * cosThetaT)) /
-                  ((etaT * cosThetaI) + (etaI * cosThetaT));
-    float Rperp = ((etaI * cosThetaI) - (etaT * cosThetaT)) /
-                  ((etaI * cosThetaI) + (etaT * cosThetaT));
-    return (Rparl * Rparl + Rperp * Rperp) / 2;
 }
 
 float3 MicrofacetTransmission_f(float3 wo, float3 wi, float alphax, float alphay, float etaA, float etaB, float3 T)
@@ -221,7 +193,7 @@ float3 MicrofacetTransmission_f(float3 wo, float3 wi, float alphax, float alphay
     float cosThetaO = CosTheta(wo);
     float cosThetaI = CosTheta(wi);
     if (cosThetaI == 0 || cosThetaO == 0)
-        return float3(0);
+        return (float3) (0);
 
     // Compute $\wh$ from $\wo$ and $\wi$ for microfacet transmission
     float eta = CosTheta(wo) > 0 ? (etaB / etaA) : (etaA / etaB);
@@ -231,9 +203,9 @@ float3 MicrofacetTransmission_f(float3 wo, float3 wi, float alphax, float alphay
 
     // Same side?
     if (dot(wo, wh) * dot(wi, wh) > 0)
-        return float3(0);
+        return (float3) (0);
 
-    float3 F = FrDielectric(dot(wo, wh), etaA, etaB);
+    float F = FrDielectric(dot(wo, wh), etaA, etaB);
 
     float sqrtDenom = dot(wo, wh) + eta * dot(wi, wh);
     int mode = 0; // 0 for TransportMode::Radiance, 1 for TransportMode::Importance
@@ -334,13 +306,14 @@ float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLi
 }
 
 [shader("closesthit")]
-void ClosestHit_MicrofacetBxDF(inout RayPayload current_payload, Attributes attrib)
+void ClosestHit_MicrofacetReflection(inout RayPayload current_payload, Attributes attrib)
 {
     // Fetch UV
     ObjectConstants objectData = gObjectBuffer[InstanceID()];
     uint vertId = 3 * PrimitiveIndex() + objectData.IndexOffset;
     uint vertOffset = objectData.VertexOffset;
     int texCoordOffset = objectData.TexCoordOffset;
+    int normalOffset = objectData.NormalOffset;
     float3 v0 = gVertexBuffer[vertOffset + gIndexBuffer[vertId]].pos;
     float3 v1 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 1]].pos;
     float3 v2 = gVertexBuffer[vertOffset + gIndexBuffer[vertId + 2]].pos;
@@ -375,11 +348,17 @@ void ClosestHit_MicrofacetBxDF(inout RayPayload current_payload, Attributes attr
     if (normalMapIdx >= 0)
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
-        ffnormal = faceforward(shading_normal, -ray_direction);
+        float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
+        ffnormal = faceforward(world_shading_normal, -ray_direction);
     }
     else
     {
-        ffnormal = faceforward(world_geometric_normal, -ray_direction);
+        float3 normal0 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId]].normal;
+        float3 normal1 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 1]].normal;
+        float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
+        float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
+        float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
+        ffnormal = faceforward(world_shading_normal, -ray_direction);
     }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
@@ -399,7 +378,7 @@ void ClosestHit_MicrofacetBxDF(inout RayPayload current_payload, Attributes attr
     float alpha = RoughnessToAlpha(1 - matData.Smoothness);
     
     // Construct SurfaceInteration
-    SurfaceInteration it;
+    SurfaceInteraction it;
     it.p = hitpoint;
     it.wo = -ray_direction;
     it.n = ffnormal;

@@ -82,6 +82,12 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							DirectX::XMFLOAT3 emissionVal = parseFloat3(emissionElem->GetText());
 							tmpMatData.Emission = emissionVal;
 						}
+						tinyxml2::XMLElement* refractiveIndexElem = materialNode->FirstChildElement("refractiveIndex");
+						if (refractiveIndexElem)
+						{
+							float refractiveIndexVal = std::stof(refractiveIndexElem->GetText());
+							tmpMatData.RefractiveIndex = refractiveIndexVal;
+						}
 						tinyxml2::XMLElement* ShaderElem = materialNode->FirstChildElement("Shader");
 						if (ShaderElem)
 						{
@@ -97,7 +103,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							tmpMatData.DiffuseMapName = textureName;
 							if (mTextureItems.find(textureName) == mTextureItems.end())
 							{
-								WTextureRecord tmpTextureRecord(textureName,textureFileName,mTextureItems.size());
+								WTextureRecord tmpTextureRecord(textureName, textureFileName, mTextureItems.size());
 								tmpTextureRecord.TextureType = DIFFUSE_MAP;
 								tmpMatData.DiffuseMapIdx = tmpTextureRecord.TextureIdx;
 								mTextureItems[textureName] = std::move(tmpTextureRecord);
@@ -167,10 +173,16 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							auto& shapes = reader.GetShapes();
 							auto& materials = reader.GetMaterials();
 
-							// Set params in renderItem & update vertex buffer
+							// Fetch vertex data
 							const auto& vertices = attrib.vertices;
 							const auto& normals = attrib.normals;
 							const auto& texcoords = attrib.texcoords;
+							// Fetch index data
+							std::vector<UINT32> indices;
+							std::vector<INT32> normal_indices;
+							std::vector<INT32> texcoord_indices;
+							getIndicesFromStructShape(shapes, indices, normal_indices, texcoord_indices);
+							// Update vertex buffer
 							r.vertexOffsetInBytes = mVertexBuffer.size() * sizeof(tinyobj::real_t);
 							r.vertexCount = vertices.size() / 3; // One vertex is consist of 3 coordinates
 							mVertexBuffer.insert(mVertexBuffer.end(), vertices.begin(), vertices.end());
@@ -179,21 +191,27 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 								r.normalOffsetInBytes = mNormalBuffer.size() * sizeof(tinyobj::real_t);
 								mNormalBuffer.insert(mNormalBuffer.end(), normals.begin(), normals.end());
 							}
+							else
+							{
+								r.normalOffsetInBytes = mNormalBuffer.size() * sizeof(tinyobj::real_t);
+								std::vector<tinyobj::real_t> generatedNormals;
+								autoGenerateVertexNormals(vertices, indices, generatedNormals);
+								mNormalBuffer.insert(mNormalBuffer.end(), generatedNormals.begin(), generatedNormals.end());
+							}
 							if (texcoords.size() > 0)
 							{
 								r.texCoordOffsetInBytes = mTexCoordBuffer.size() * sizeof(tinyobj::real_t);
 								mTexCoordBuffer.insert(mTexCoordBuffer.end(), texcoords.begin(), texcoords.end());
 							}
 
-							// Set params in renderItem & update index buffer
-							std::vector<UINT32> indices;
-							std::vector<INT32> normal_indices;
-							std::vector<INT32> texcoord_indices;
-							getIndicesFromStructShape(shapes, indices, normal_indices, texcoord_indices);
+							// Update index buffer
 							r.indexOffsetInBytes = mIndexBuffer.size() * sizeof(UINT32);
 							r.indexCount = indices.size();
 							mIndexBuffer.insert(mIndexBuffer.end(), indices.begin(), indices.end());
-							mNormalIndexBuffer.insert(mNormalIndexBuffer.end(), normal_indices.begin(), normal_indices.end());
+							if(normals.size() > 0)
+								mNormalIndexBuffer.insert(mNormalIndexBuffer.end(), normal_indices.begin(), normal_indices.end());
+							else
+								mNormalIndexBuffer.insert(mNormalIndexBuffer.end(), indices.begin(), indices.end());
 							mTexCoordIndexBuffer.insert(mTexCoordIndexBuffer.end(), texcoord_indices.begin(), texcoord_indices.end());
 
 							// Build temp geometry record & store to mGeometryMap
@@ -298,7 +316,7 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 				{
 					emission = parseFloat3(emissionElem->GetText());
 				}
-				mLights.emplace_back(corner,v1,v2,emission);
+				mLights.emplace_back(corner, v1, v2, emission);
 			}
 			else if (nodeType == "camera")
 			{
@@ -420,7 +438,7 @@ DirectX::XMFLOAT4X4 parseFloat4x4(const char* text)
 }
 
 void getIndicesFromStructShape(
-	const std::vector<tinyobj::shape_t>& p_shapes, 
+	const std::vector<tinyobj::shape_t>& p_shapes,
 	std::vector<UINT32>& indices, std::vector<INT32>& normal_indices,
 	std::vector<INT32>& texcoord_indices)
 {
@@ -483,4 +501,34 @@ std::wstring string2wstring(const std::string& s) {
 	delete[] dest;
 	setlocale(LC_ALL, curLocale.c_str());
 	return result;
+}
+
+void autoGenerateVertexNormals(const std::vector<tinyobj::real_t>& vertices, const std::vector<UINT32>& indices, std::vector<tinyobj::real_t>& normals)
+{
+	normals.resize(vertices.size(), 0);
+	size_t nFaces = indices.size() / 3;
+	for (size_t faceIdx = 0; faceIdx < nFaces; faceIdx++)
+	{
+		size_t index0 = indices[3 * faceIdx];
+		size_t index1 = indices[3 * faceIdx + 1];
+		size_t index2 = indices[3 * faceIdx + 2];
+		DirectX::XMFLOAT3 vertex0(vertices[3 * index0], vertices[3 * index0 + 1], vertices[3 * index0 + 2]);
+		DirectX::XMFLOAT3 vertex1(vertices[3 * index1], vertices[3 * index1 + 1], vertices[3 * index1 + 2]);
+		DirectX::XMFLOAT3 vertex2(vertices[3 * index2], vertices[3 * index2 + 1], vertices[3 * index2 + 2]);
+		DirectX::FXMVECTOR& fVertex0 = DirectX::XMLoadFloat3(&vertex0);
+		DirectX::FXMVECTOR& fVertex1 = DirectX::XMLoadFloat3(&vertex1);
+		DirectX::FXMVECTOR& fVertex2 = DirectX::XMLoadFloat3(&vertex2);
+		auto& fVector1 = DirectX::XMVectorSubtract(fVertex1, fVertex0);
+		auto& fVector2 = DirectX::XMVectorSubtract(fVertex2, fVertex0);
+		auto& fNormal = DirectX::XMVector3Normalize(DirectX::XMVector3Cross(fVector1, fVector2));
+		DirectX::XMFLOAT3 normal;
+		DirectX::XMStoreFloat3(&normal, fNormal);
+		normals[3 * index0] += normal.x; normals[3 * index0 + 1] += normal.y; normals[3 * index0 + 2] += normal.z;
+		normals[3 * index1] += normal.x; normals[3 * index1 + 1] += normal.y; normals[3 * index1 + 2] += normal.z;
+		normals[3 * index2] += normal.x; normals[3 * index2 + 1] += normal.y; normals[3 * index2 + 2] += normal.z;
+	}
+	for (size_t i = 0; i < normals.size(); i++)
+	{
+		normals[i] /= 3.f;
+	}
 }

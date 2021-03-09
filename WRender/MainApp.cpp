@@ -157,8 +157,6 @@ private:
 
 	UINT mSkyTexHeapIndex = 0;
 
-	PassConstants mMainPassCB;
-
 	Camera mCamera;
 
 	POINT mLastMousePos;
@@ -178,7 +176,7 @@ private:
 	/// \param     instances : pair of BLAS and transform
 	/// \param     updateOnly: if true, perform a refit instead of a full build
 	void CreateTopLevelAS(
-		const std::vector<std::pair<ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly=false);
+		const std::vector<std::pair<ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly = false);
 
 	/// Create all acceleration structures, bottom and top
 	void CreateAccelerationStructures();
@@ -207,11 +205,12 @@ private:
 	ComPtr<IDxcBlob> m_missLibrary;
 	ComPtr<IDxcBlob> m_hitShadowLibrary;
 	ComPtr<IDxcBlob> m_hitSpecularLibrary;
+	ComPtr<IDxcBlob> m_hitMicrofacetLibrary;
+	ComPtr<IDxcBlob> m_hitLambertianLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
 	ComPtr<ID3D12RootSignature> m_hitShadowSignature;
-	ComPtr<ID3D12RootSignature> m_hitDiffuseSignature;
 	ComPtr<ID3D12RootSignature> m_missSignature;
 	ComPtr<ID3D12RootSignature> m_missShadowSignature;
 
@@ -271,6 +270,7 @@ private:
 
 	// num static frame
 	UINT mNumStaticFrame = 0;
+	UINT mNumFaces = 0;
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
@@ -443,7 +443,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	mCommandList->RSSetScissorRects(1, &mScissorRect);
 
 	// Clear the back buffer and depth buffer.
-	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.clearColor, 0, nullptr);
+	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mPassCB.bgColor, 0, nullptr);
 	mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
 	// Specify the buffers we are going to render to.
@@ -527,7 +527,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 
-	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials, mTextures);
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials, mTextures, mNumFaces);
 
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -581,7 +581,7 @@ void MainApp::OnMouseMove(WPARAM btnState, int x, int y)
 		float dx = 0.05f * static_cast<float>(x - mLastMousePos.x);
 		float dy = 0.05f * static_cast<float>(y - mLastMousePos.y);
 
-		mCamera.Walk(2.0f * (dx-dy));
+		mCamera.Walk(2.0f * (dx - dy));
 	}
 
 	mLastMousePos.x = x;
@@ -674,6 +674,7 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 			);
 			materialData.TransColor = m.TransColor;
 			materialData.F0 = m.F0;
+			materialData.RefractiveIndex = m.RefractiveIndex;
 
 			currMaterialBuffer->CopyData(m.MatIdx, materialData);
 
@@ -890,27 +891,31 @@ void MainApp::CreateTopLevelAS(
 	bool updateOnly  // If true the top-level AS will only be refitted and not
 				   // rebuilt from scratch
 ) {
-	
+
 	if (!updateOnly)
 	{
-	// Gather all the instances into the builder helper
-	for (size_t i = 0; i < instances.size(); i++) {
-		const auto& ritem = findRenderItem(mRenderItems, i);
-		const auto& material = mMaterials[ritem.materialName];
-		const auto& Shader = material.Shader;
-		if (Shader=="SpecularReflection")
-			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-				instances[i].second, static_cast<UINT>(i),
-				static_cast<UINT>(2*1));
-		else if (Shader=="SpecularTransmission")
-			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-				instances[i].second, static_cast<UINT>(i),
-				static_cast<UINT>(2*2));
-		else
-			mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-				instances[i].second, static_cast<UINT>(i),
-				static_cast<UINT>(0));
-	}
+		// Gather all the instances into the builder helper
+		for (size_t i = 0; i < instances.size(); i++) {
+			const auto& ritem = findRenderItem(mRenderItems, i);
+			const auto& material = mMaterials[ritem.materialName];
+			const auto& Shader = material.Shader;
+			if (Shader == "SpecularReflection")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 1));
+			else if (Shader == "SpecularTransmission")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 1));
+			else if (Shader == "FresnelSpecular")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 4));
+			else
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 3)); // LambertianReflection
+		}
 
 		// As for the bottom-level AS, the building the AS requires some scratch space
 		// to store temporary data in addition to the actual AS. In the case of the
@@ -1053,10 +1058,12 @@ void MainApp::CreateRayTracingPipeline()
 	// used.
 	m_rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\RayGen.hlsl");
 	m_missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Miss.hlsl");
-	m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
-	m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
+	//m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
+	//m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
 	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_Shadow.hlsl");
 	m_hitSpecularLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_SpecularBxDF.hlsl");
+	m_hitMicrofacetLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MicrofacetBxDF.hlsl");
+	m_hitLambertianLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_LambertianBxDF.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1066,17 +1073,19 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_rayGenLibrary.Get(), { L"RayGen" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss_Shadow" });
-	pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit_Default" });
-	pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
+	//pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit_Default" });
+	//pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
+	pipeline.AddLibrary(m_hitMicrofacetLibrary.Get(), { L"ClosestHit_MicrofacetReflection" });
 	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_SpecularReflection" });
 	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_SpecularTransmission" });
+	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_FresnelSpecular" });
+	pipeline.AddLibrary(m_hitLambertianLibrary.Get(), { L"ClosestHit_LambertianReflection" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
 	// parameters and buffers will be accessed.
 	m_rayGenSignature = CreateRayGenSignature();
 	m_hitSignature = CreateHitSignature();
-	m_hitDiffuseSignature = CreateHitSignature();
 	m_hitShadowSignature = CreateHitShadowSignature();
 	m_missSignature = CreateMissSignature();
 	m_missShadowSignature = CreateEmptySignature();
@@ -1089,10 +1098,13 @@ void MainApp::CreateRayTracingPipeline()
 	// discard some intersections. Finally, the closest-hit program is invoked on
 	// the intersection point closest to the ray origin. Those 3 shaders are bound
 	// together into a hit group.
-	pipeline.AddHitGroup(L"HitGroup_Default", L"ClosestHit_Default");
-	pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
+	//pipeline.AddHitGroup(L"HitGroup_Default", L"ClosestHit_Default");
+	//pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
+	pipeline.AddHitGroup(L"HitGroup_MicrofacetReflection", L"ClosestHit_MicrofacetReflection");
 	pipeline.AddHitGroup(L"HitGroup_SpecularReflection", L"ClosestHit_SpecularReflection");
 	pipeline.AddHitGroup(L"HitGroup_SpecularTransmission", L"ClosestHit_SpecularTransmission");
+	pipeline.AddHitGroup(L"HitGroup_LambertianReflection", L"ClosestHit_LambertianReflection");
+	pipeline.AddHitGroup(L"HitGroup_FresnelSpecular", L"ClosestHit_FresnelSpecular");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
@@ -1101,10 +1113,13 @@ void MainApp::CreateRayTracingPipeline()
 	// to as hit groups, meaning that the underlying intersection, any-hit and
 	// closest-hit shaders share the same root signature.
 	pipeline.AddRootSignatureAssociation(m_rayGenSignature.Get(), { L"RayGen" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_Default" });
+	//pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_Default" });
+	//pipeline.AddRootSignatureAssociation(m_hitDiffuseSignature.Get(), { L"HitGroup_Diffuse" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MicrofacetReflection" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_SpecularReflection" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_SpecularTransmission" });
-	pipeline.AddRootSignatureAssociation(m_hitDiffuseSignature.Get(), { L"HitGroup_Diffuse" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_LambertianReflection" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_FresnelSpecular" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
 	pipeline.AddRootSignatureAssociation(m_missShadowSignature.Get(), { L"Miss_Shadow" });
@@ -1127,7 +1142,7 @@ void MainApp::CreateRayTracingPipeline()
 	// then requires a trace depth of 1. Note that this recursion depth should be
 	// kept to a minimum for best performance. Path tracing algorithms can be
 	// easily flattened into a simple loop in the ray generation.
-	pipeline.SetMaxRecursionDepth(8);
+	pipeline.SetMaxRecursionDepth(5);
 
 	// Compile the pipeline for execution on the GPU
 	m_rtStateObject = pipeline.Generate();
@@ -1253,7 +1268,7 @@ void MainApp::CreateTextureShaderResourceHeap()
 		srvDesc.Texture2D.MipLevels = tex->GetDesc().MipLevels;
 		md3dDevice->CreateShaderResourceView(tex.Get(), &srvDesc, srvHandle);
 		//if (texItem->TextureIdx < orderedTextureItems.size() - 1)
-			srvHandle.Offset(1, mCbvSrvDescriptorSize);
+		srvHandle.Offset(1, mCbvSrvDescriptorSize);
 	}
 
 	/*for (const auto& texItem : mTextures)
@@ -1321,7 +1336,7 @@ void MainApp::CreateShaderBindingTable() {
 	m_sbtHelper.AddMissProgram(L"Miss_Shadow", {});
 
 	// Adding the triangle hit shader
-	m_sbtHelper.AddHitGroup(L"HitGroup_Default",
+	m_sbtHelper.AddHitGroup(L"HitGroup_MicrofacetReflection",
 		{
 			objectBufferPointer,
 			materialBufferPointer,
@@ -1358,6 +1373,42 @@ void MainApp::CreateShaderBindingTable() {
 			materialBufferPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_SpecularTransmission",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_LambertianReflection",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_FresnelSpecular",
 		{
 			objectBufferPointer,
 			materialBufferPointer,
@@ -1450,6 +1501,8 @@ void MainApp::SetupSceneWithXML(const char* filename)
 
 	const auto& cameraConfig = mSceneDescParser.getCameraConfig();
 	const auto& lights = mSceneDescParser.getLights();
+
+	mNumFaces = indexBuffer.size() / 3;
 
 	UINT64 vertexBufferSize = vertexBuffer.size() * sizeof(tinyobj::real_t);
 	mVertexBuffer = d3dUtil::CreateDefaultBuffer(

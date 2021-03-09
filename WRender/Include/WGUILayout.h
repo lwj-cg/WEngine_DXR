@@ -43,8 +43,9 @@ public:
 	static void ShowMaterialModifier(bool* p_open, std::string materialName, MaterialList& materials, TextureList& textures);
 	static void ShowPlaceholderObject(const char* prefix, int uid,
 		MaterialList& materials, const char* material_name);
-	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList, 
-		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, 
+	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList, const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces);
+	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
+		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
 		PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures
 	);
 };
@@ -114,7 +115,7 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 	static std::vector<const char*> material_items(materials.size());
 	static int item_current = 0;
 	int n = 0;
-	for (auto iter = materials.begin(); iter != materials.end(); ++iter,++n)
+	for (auto iter = materials.begin(); iter != materials.end(); ++iter, ++n)
 	{
 		material_items[n] = iter->first.c_str();
 		if (iter->first == r.materialName) item_current = n;
@@ -137,12 +138,19 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 	auto& m = materials.at(materialName);
 	if (ImGui::ColorEdit4("Albedo##value", &m.Albedo.x))
 		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::ColorEdit4("TransColor##value", &m.TransColor.x))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat3("F0##value", &m.F0.x, 0.01f, 0, 1))
+		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Metallic##value", &m.Metallic, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat("RefractiveIndex##value", &m.RefractiveIndex, 0.01f, 1, 2.5))
+		m.NumFramesDirty = gNumFrameResources;
+
 	static ImGuiComboFlags flags = 0;
 	const char* diffuseMapPreviewValue = m.DiffuseMapIdx >= 0 ? m.DiffuseMapName.c_str() : "None";
 	const char* normalMapPreviewValue = m.NormalMapIdx >= 0 ? m.NormalMapName.c_str() : "None";
@@ -158,7 +166,7 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 	{
 		for (const auto& titem : textures)
 		{
-			if (titem.second->TextureType==DIFFUSE_MAP)
+			if (titem.second->TextureType == DIFFUSE_MAP)
 			{
 				bool is_selected = diffuseMapCurrentIdx == titem.second->TextureIdx;
 				if (ImGui::Selectable(titem.first.c_str(), is_selected))
@@ -290,7 +298,7 @@ void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
 
 void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
 	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
-	PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures)
+	PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces)
 {
 	//// Prepare
 	//static std::vector<std::string> OrderedRenderItemNames(renderItems.size());
@@ -366,7 +374,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	// We specify a default position/size in case there's no data in the .ini file.
 	// We only do it to make the demo applications a little more welcoming, but typically this isn't required.
-	ImGui::SetNextWindowPos(ImVec2(450, 20), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowPos(ImVec2(250, 20), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(350, 680), ImGuiCond_FirstUseEver);
 
 	// Main body of my GUI Layout starts here.
@@ -395,6 +403,11 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	//}
 
 	ImGui::Text("Scene: CornellBox");
+	ImGui::Text("Number of faces: %d", numFaces);
+	//ImGui::DragInt("Sqrt Samples##value", (int*)&passData.SqrtSamples, 1, 1, 8);
+	//ImGui::DragInt("Max Depth##value", (int*)&passData.MaxDepth, 1, 1, 25);
+	//if (ImGui::DragFloat("Scene Epsilon##value", &passData.SceneEpsilon, 0.0001, 0.0001, 0.1))
+	//	std::cerr << "enter" << std::endl;
 
 	if (ImGui::CollapsingHeader("Objects"))
 	{

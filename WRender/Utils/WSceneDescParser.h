@@ -25,6 +25,7 @@ void getIndicesFromStructShape(
 void getIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<UINT32>& s_indices);
 void getNormalIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& n_indices);
 void getTexCoordIndicesFromStructIndex(const std::vector<tinyobj::index_t>& p_indices, std::vector<INT32>& t_indices);
+void autoGenerateVertexNormals(const std::vector<tinyobj::real_t>& vertices, const std::vector<UINT32>& indices, std::vector<tinyobj::real_t>& normals);
 std::wstring string2wstring(const std::string& str);
 
 struct WCamereConfig

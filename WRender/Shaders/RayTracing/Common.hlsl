@@ -50,12 +50,9 @@ struct MaterialData
     float Transparent;
     float Smoothness;
     float Metallic;
-    float MetalPad0;
-    float MetalPad1;
+    float RefraciveIndex;
     int DiffuseMapIdx;
     int NormalMapIdx;
-    int MaterialPad0;
-    int MaterialPad1;
 };
 
 struct ParallelogramLight
