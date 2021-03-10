@@ -10,6 +10,7 @@
 #include "imgui_impl_dx12.h"
 #include "../../Common/d3dUtil.h"
 #include "../FrameResource.h"
+using namespace DirectX;
 
 extern const int gNumFrameResources;
 
@@ -31,7 +32,7 @@ inline static void setFrameDirty(int& numFrameDirty, int numFrameResources)
 class WGUILayout
 {
 public:
-	typedef WPassConstants PassData;
+	typedef WPassConstantsItem PassData;
 	typedef std::map<std::string, WRenderItem> RenderItemList;
 	typedef std::map<std::string, WMaterial> MaterialList;
 	typedef std::unordered_map<std::string, std::unique_ptr<WTexture>> TextureList;
@@ -43,11 +44,9 @@ public:
 	static void ShowMaterialModifier(bool* p_open, std::string materialName, MaterialList& materials, TextureList& textures);
 	static void ShowPlaceholderObject(const char* prefix, int uid,
 		MaterialList& materials, const char* material_name);
-	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList, const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces);
-	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
-		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
-		PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures
-	);
+	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList, 
+		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, 
+		PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces);
 };
 
 // Helper to display a little (?) mark which shows a tooltip when hovered.
@@ -404,10 +403,12 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	ImGui::Text("Scene: CornellBox");
 	ImGui::Text("Number of faces: %d", numFaces);
-	//ImGui::DragInt("Sqrt Samples##value", (int*)&passData.SqrtSamples, 1, 1, 8);
-	//ImGui::DragInt("Max Depth##value", (int*)&passData.MaxDepth, 1, 1, 25);
-	//if (ImGui::DragFloat("Scene Epsilon##value", &passData.SceneEpsilon, 0.0001, 0.0001, 0.1))
-	//	std::cerr << "enter" << std::endl;
+	if(ImGui::SliderInt("Sqrt Samples##value", (int*)&passData.SqrtSamples, 1, 8))
+		passData.NumFramesDirty = gNumFrameResources;
+	if(ImGui::SliderInt("Max Depth##value", (int*)&passData.MaxDepth, 1, 25))
+		passData.NumFramesDirty = gNumFrameResources;
+	if(ImGui::SliderFloat("Scene Epsilon##value", &passData.SceneEpsilon, 0.0001, 0.1, "%.4f", ImGuiSliderFlags_Logarithmic))
+		passData.NumFramesDirty = gNumFrameResources;
 
 	if (ImGui::CollapsingHeader("Objects"))
 	{

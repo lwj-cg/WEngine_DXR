@@ -9,7 +9,6 @@
 #include "../Common/GeometryGenerator.h"
 #include "../Common/Camera.h"
 #include "FrameResource.h"
-#include "Utils/ObjFileLoader.h"
 #include "Utils/WSceneDescParser.h"
 #include "Include/WGUILayout.h"
 #include "Include/GeometryShape.h"
@@ -141,16 +140,6 @@ private:
 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
-	std::vector<Sphere> mSphereItems;
-	std::vector<Plane>  mPlaneItems;
-	std::vector<PureGeometryMaterial> mGeometryMaterials;
-
-	ComPtr<ID3D12Resource> mInputSphereBuffer = nullptr;
-	ComPtr<ID3D12Resource> mInputSphereUploadBuffer = nullptr;
-	ComPtr<ID3D12Resource> mInputPlaneBuffer = nullptr;
-	ComPtr<ID3D12Resource> mInputPlaneUploadBuffer = nullptr;
-	ComPtr<ID3D12Resource> mGeometryMaterialBuffer = nullptr;
-	ComPtr<ID3D12Resource> mGeometryMaterialUploadBuffer = nullptr;
 
 	// Render items divided by PSO.
 	std::vector<RenderItem*> mRitemLayer[(int)RenderLayer::Count];
@@ -243,6 +232,7 @@ private:
 	std::map<std::string, WGeometryRecord> mGeometryMap;
 	std::map<std::string, WRenderItem> mRenderItems;
 	std::map<std::string, WMaterial> mMaterials;
+	WPassConstantsItem mPassItem;
 	void SetupSceneWithXML(const char* filename);
 	void SetupCamera(const WCamereConfig& cameraConfig);
 	void LoadTextures(const std::map<std::string, WTextureRecord>& mTextureItems);
@@ -527,7 +517,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 
-	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassCB, mRenderItems, mMaterials, mTextures, mNumFaces);
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassItem, mRenderItems, mMaterials, mTextures, mNumFaces);
 
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -704,6 +694,15 @@ void MainApp::UpdateMainPassCB(const GameTimer& gt)
 	XMStoreFloat4x4(&mPassCB.ViewProj, XMMatrixTranspose(viewProj));
 	XMStoreFloat4x4(&mPassCB.InvViewProj, XMMatrixTranspose(invViewProj));
 	mPassCB.EyePosW = mCamera.GetPosition3f();
+
+	if (mPassItem.NumFramesDirty > 0)
+	{
+		mPassCB.MaxDepth = mPassItem.MaxDepth;
+		mPassCB.SqrtSamples = mPassItem.SqrtSamples;
+		mPassCB.SceneEpsilon = mPassItem.SceneEpsilon;
+		mNumStaticFrame = 0;
+		--mPassItem.NumFramesDirty;
+	}
 	mPassCB.NumStaticFrame = mNumStaticFrame;
 
 	auto currPassCB = mCurrFrameResource->PassCB.get();
@@ -1490,6 +1489,7 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	mGeometryMap = mSceneDescParser.getGeometryMap();
 	mRenderItems = mSceneDescParser.getRenderItems();
 	mMaterials = mSceneDescParser.getMaterialItems();
+	
 	const auto& textureItems = mSceneDescParser.getTextureItems();
 
 	const auto& vertexBuffer = mSceneDescParser.getVertexBuffer();

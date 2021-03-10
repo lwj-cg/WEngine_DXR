@@ -46,31 +46,18 @@ struct WPassConstants
 	UINT MaxDepth = 16;
 };
 
-struct MaterialData
+struct WPassConstantsItem
 {
-	DirectX::XMFLOAT4 DiffuseAlbedo = { 1.0f, 1.0f, 1.0f, 1.0f };
-	DirectX::XMFLOAT3 FresnelR0 = { 0.01f, 0.01f, 0.01f };
-	float Roughness = 0.5f;
-	float Metallic = 0.0f;
-	float MetalPad0;
-	float MetalPad1;
-	float MetalPad2;
+	float SceneEpsilon = 0.01f;
+	UINT NumStaticFrame = 1;
+	UINT SqrtSamples = 2;
+	UINT MaxDepth = 16;
 
-	// Used in texture mapping.
-	DirectX::XMFLOAT4X4 MatTransform = MathHelper::Identity4x4();
-
-
-	UINT DiffuseMapIndex = 0;
-	UINT MaterialPad0;
-	UINT MaterialPad1;
-	UINT MaterialPad2;
-};
-
-struct Vertex
-{
-	DirectX::XMFLOAT3 Pos;
-	DirectX::XMFLOAT3 Normal;
-	DirectX::XMFLOAT2 TexC;
+	// Dirty flag indicating the material has changed and we need to update the constant buffer.
+	// Because we have a material constant buffer for each FrameResource, we have to apply the
+	// update to each FrameResource.  Thus, when we modify a material we should set 
+	// NumFramesDirty = gNumFrameResources so that each frame resource gets the update.
+	int NumFramesDirty = gNumFrameResources;
 };
 
 // Basic Vertex
