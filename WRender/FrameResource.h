@@ -90,7 +90,7 @@ struct RVertex
 struct WMaterialData
 {
 	DirectX::XMFLOAT4 Albedo = { 1.0f, 1.0f, 1.0f, 1.0f };
-	DirectX::XMFLOAT4 TransColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	DirectX::XMFLOAT4 TransColor = { .0f, .0f, .0f, 1.0f };
 	DirectX::XMFLOAT3 Emission = { 0.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT3 F0 = { 0.5f, 0.5f, 0.5f };
 	float Transparent = 0.0f;

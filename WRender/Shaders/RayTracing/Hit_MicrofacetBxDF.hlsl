@@ -3,7 +3,7 @@
 #include "Random.hlsl"
 #include "HitCommon.hlsl"
 #include "Sampling.hlsl"
-#include "BSDFCommon.hlsl"
+#include "BxDF/BSDFCommon.hlsl"
 #include "PBR.hlsl"
 #include "Light.hlsl"
 #include "Intersection.hlsl"

@@ -3,7 +3,7 @@
 #include "Random.hlsl"
 #include "HitCommon.hlsl"
 #include "Sampling.hlsl"
-#include "BSDFCommon.hlsl"
+#include "BxDF/BSDFCommon.hlsl"
 #include "PBR.hlsl"
 #include "Light.hlsl"
 #include "Intersection.hlsl"
@@ -47,7 +47,7 @@ float3 SpecularTransmission_Samplef(float3 wo /* from isect */, out float3 wi, c
     if (!refract(-wo, faceforward(float3(0, 0, 1), wo), etaI / etaT, wi))
         return 0;
     pdf = 1;
-    float3 ft = T * ((float3) 1.f - FresnelTerm(F0, CosTheta(wi)));
+    float3 ft = T * ((float3) 1.f) - FresnelTerm(F0, CosTheta(wi));
     return ft / AbsCosTheta(wi);
 }
 

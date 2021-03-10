@@ -25,6 +25,9 @@
     <Filter Include="Resource Files\Scenes">
       <UniqueIdentifier>{742a6682-0ac5-46f7-8de1-63fb4bcd0edc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shaders\BxDF">
+      <UniqueIdentifier>{be4f5f61-a46b-42cc-a095-2f464586a162}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FrameResource.cpp">
@@ -195,9 +198,6 @@
     </Xml>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Shaders\RayTracing\BSDFCommon.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\ClosestHit_Diffuse.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -210,13 +210,7 @@
     <FxCompile Include="Shaders\RayTracing\Hit.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\Hit_MicrofacetBxDF.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Hit_Shadow.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\Hit_SpecularBxDF.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\HitCommon.hlsl">
@@ -243,7 +237,46 @@
     <FxCompile Include="Shaders\RayTracing\Sampling.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\BSDFCommon.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\fresnel.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\microfacet.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\DisneyDiffuse.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\LambertianReflection.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\LambertianTransmission.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\MicrofacetReflection.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\MicrofacetTransmission.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\SpecularReflection.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\SpecularTransmission.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_GlassMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Hit_LambertianBxDF.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_MicrofacetBxDF.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_SpecularBxDF.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
