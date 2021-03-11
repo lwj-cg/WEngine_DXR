@@ -64,26 +64,6 @@ void WGUILayout::HelpMarker(const char* desc)
 	}
 }
 
-// Demonstrate create a simple property editor.
-void WGUILayout::ShowAppPropertyEditor(bool* p_open, MaterialList& materials)
-{
-	ImGui::SetNextWindowSize(ImVec2(350, 350), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("Material modifier", p_open))
-	{
-		ImGui::End();
-		return;
-	}
-
-	// List placeholder objects 
-	ShowPlaceholderObject("bricks", 0, materials, "bricks0");
-	ShowPlaceholderObject("tile", 1, materials, "tile0");
-	ShowPlaceholderObject("mirror", 2, materials, "mirror0");
-	ShowPlaceholderObject("skull", 3, materials, "skullMat");
-	ShowPlaceholderObject("sky", 4, materials, "sky");
-
-	ImGui::End();
-}
-
 // Create a simple object inspector
 void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 	RenderItemList& renderItems, MaterialList& materials, TextureList& textures)
@@ -148,6 +128,8 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("RefractiveIndex##value", &m.RefractiveIndex, 0.01f, 1, 2.5))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat("Sigma##value", &m.Sigma, 0.1f, 0, 90))
 		m.NumFramesDirty = gNumFrameResources;
 
 	static ImGuiComboFlags flags = 0;
@@ -254,47 +236,6 @@ void WGUILayout::ShowMaterialModifier(bool* p_open, std::string materialName,
 	ImGui::End();
 }
 
-
-//-----------------------------------------------------------------------------
-// [SECTION] Example App: Property Editor / ShowExampleAppPropertyEditor()
-//-----------------------------------------------------------------------------
-
-void WGUILayout::ShowPlaceholderObject(const char* prefix, int uid,
-	MaterialList& materials, const char* material_name)
-{
-	// Use object uid as identifier. Most commonly you could also use the object pointer as a base ID.
-	ImGui::PushID(uid);
-
-	// Text and Tree nodes are less high than framed widgets, using AlignTextToFramePadding() we add vertical spacing to make the tree lines equal high.
-	ImGui::AlignTextToFramePadding();
-	bool node_open = ImGui::TreeNode("Material", "%s", prefix, uid);
-	auto mat = materials[std::string(material_name)];
-
-	if (node_open)
-	{
-		// Default settings for color edit
-		static bool alpha_preview = true;
-		static bool alpha_half_preview = false;
-		static bool drag_and_drop = true;
-		static bool options_menu = true;
-		static bool hdr = false;
-		ImGuiColorEditFlags misc_flags = (hdr ? ImGuiColorEditFlags_HDR : 0) | (drag_and_drop ? 0 : ImGuiColorEditFlags_NoDragDrop) | (alpha_half_preview ? ImGuiColorEditFlags_AlphaPreviewHalf : (alpha_preview ? ImGuiColorEditFlags_AlphaPreview : 0)) | (options_menu ? 0 : ImGuiColorEditFlags_NoOptions);
-
-		ImGui::DragFloat("Roughness##value", &mat.Smoothness, 0.01f, 0, 1);
-
-		ImGui::DragFloat("Metallic##value", &mat.Metallic, 0.01f, 0, 1);
-
-		float fpForAlbedo[4] = { mat.Albedo.x, mat.Albedo.y, mat.Albedo.z, mat.Albedo.w };
-		ImGui::ColorEdit4("DiffuseAlbedo##2f", fpForAlbedo, ImGuiColorEditFlags_Float | misc_flags);
-		mat.Albedo = fpToXMFLOAT4(fpForAlbedo);
-
-		mat.NumFramesDirty = gNumFrameResources;
-
-		ImGui::TreePop();
-	}
-	ImGui::PopID();
-}
-
 void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
 	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
 	PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces)
@@ -387,11 +328,8 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 		return;
 	}
 
-	static bool show_hierarchy = false;
 	static bool show_inspector = false;
 	static bool show_material_modifier = false;
-	static bool show_app_property_editor = false;
-	if (show_hierarchy)     ShowAppPropertyEditor(&show_hierarchy, materials);
 
 	// e.g. Leave a fixed amount of width for labels (by passing a negative value), the rest goes to widgets.
 	ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
@@ -405,7 +343,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	ImGui::Text("Number of faces: %d", numFaces);
 	if(ImGui::SliderInt("Sqrt Samples##value", (int*)&passData.SqrtSamples, 1, 8))
 		passData.NumFramesDirty = gNumFrameResources;
-	if(ImGui::SliderInt("Max Depth##value", (int*)&passData.MaxDepth, 1, 25))
+	if(ImGui::SliderInt("Max Depth##value", (int*)&passData.MaxDepth, 0, 25))
 		passData.NumFramesDirty = gNumFrameResources;
 	if(ImGui::SliderFloat("Scene Epsilon##value", &passData.SceneEpsilon, 0.0001, 0.1, "%.4f", ImGuiSliderFlags_Logarithmic))
 		passData.NumFramesDirty = gNumFrameResources;

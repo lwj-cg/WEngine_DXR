@@ -96,4 +96,9 @@ inline float PowerHeuristic(int nf, float fPdf, int ng, float gPdf)
     return (f * f) / (f * f + g * g);
 }
 
+inline float Radians(float deg)
+{
+    return (M_PI / 180.f) * deg;
+}
+
 #endif

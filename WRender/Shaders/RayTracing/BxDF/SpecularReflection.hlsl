@@ -1,14 +1,14 @@
 #ifndef SPECULAR_REFLECTION_H_
 #define SPECULAR_REFLECTION_H_
 
-#include "../PBR.hlsl"
+#include "../Common.hlsl"
 #include "../fresnel.hlsl"
 #include "BSDFCommon.hlsl"
 
 struct SpecularReflection
 {
-    BxDFType bxdfType; // BSDF_REFLECTION | BSDF_SPECULAR
-    float3 R;
+    BxDFType type; // BSDF_REFLECTION | BSDF_SPECULAR
+    Spectrum R;
     FresnelDielectric fresnel;
     float3 f(float3 wo, float3 wi)
     {
@@ -24,9 +24,19 @@ struct SpecularReflection
     {
         // Compute perfect specular reflection direction
         wi = float3(-wo.x, -wo.y, wo.z);
+        Spectrum F = fresnel.Evaluate(CosTheta(wi));
         pdf = 1;
-        return fresnel.Evaluate(CosTheta(wi)) * R / AbsCosTheta(wi);
+        return F * R / AbsCosTheta(wi);
     }
 };
+
+SpecularReflection createSpecularReflection(float3 R, FresnelDielectric fresnel, BxDFType type = BSDF_REFLECTION|BSDF_SPECULAR)
+{
+    SpecularReflection SpecRefl;
+    SpecRefl.type = type;
+    SpecRefl.R = R;
+    SpecRefl.fresnel = fresnel;
+    return SpecRefl;
+}
 
 #endif

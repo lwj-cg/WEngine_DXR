@@ -10,8 +10,8 @@
 struct FresnelSpecular
 {
     BxDFType type; // BSDF_REFLECION | BSDF_TRANSMISSION | BSDF_SPECULAR
-    float3 R;
-    float3 T;
+    Spectrum R;
+    Spectrum T;
     float etaA;
     float etaB;
     
@@ -25,7 +25,7 @@ struct FresnelSpecular
         return 0;
     }
     
-    float3 Sample_f(const float3 wo, out float3 wi, const float2 u, out float pdf)
+    float3 Sample_f(const float3 wo, out float3 wi, const float2 u, out float pdf, inout BxDFType sampledType)
     {
         float F = FrDielectric(CosTheta(wo), etaA, etaB);
         if (u[0] < F)
@@ -59,3 +59,14 @@ struct FresnelSpecular
         }
     }
 };
+
+FresnelSpecular createFresnelSpecular(float3 R, float3 T, float etaA, float etaB, BxDFType type = BSDF_REFLECTION|BSDF_TRANSMISSION|BSDF_SPECULAR)
+{
+    FresnelSpecular frSpec;
+    frSpec.type = type;
+    frSpec.R = R;
+    frSpec.T = T;
+    frSpec.etaA = etaA;
+    frSpec.etaB = etaB;
+    return frSpec;
+}

@@ -1,33 +1,35 @@
-
 #include "HitCommon.hlsl"
-#include "BxDF/BSDFCommon.hlsl"
-#include "BxDF/FresnelSpecular.hlsl"
-#include "BxDF/MicrofacetReflection.hlsl"
-#include "BxDF/MicrofacetTransmission.hlsl"
+#include "BxDF/LambertianReflection.hlsl"
+#include "BxDF/OrenNayar.hlsl"
 #include "microfacet.hlsl"
 #include "Helpers.hlsl"
 #include "Light.hlsl"
 #include "Random.hlsl"
 
-struct GlassMaterial
-{    
-    MicrofacetReflection microRefl;
-    MicrofacetTransmission microTrans;
-        
+struct MatteMaterial
+{
+    Spectrum Kd;
+    float sigma;
+    LambertianReflection lambertianRefl;
+    OrenNayar orenNayarDiffuse;
+    
     Spectrum f(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb, float3 ng)
     {
         float3 wo = WorldToLocal(woWorld, onb), wi = WorldToLocal(wiWorld, onb);
-        if (wo.z == 0) return 0.;
-        float pdf = 0.f;
+        if (wo.z == 0)
+            return 0.;
         bool reflect = dot(wiWorld, ng) * dot(woWorld, ng) > 0;
-        float3 f = (float3) 0.f;
+        Spectrum f = (float3) 0.f;
         if (reflect)
         {
-            f = microRefl.f(wo, wi);
-        }
-        else
-        {
-            f = microTrans.f(wo, wi);
+            if (sigma==0)
+            {
+                f = lambertianRefl.f(wo, wi);
+            }
+            else
+            {
+                f = orenNayarDiffuse.f(wo, wi);
+            }
         }
         return f;
     }
@@ -35,64 +37,62 @@ struct GlassMaterial
     float Pdf(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb)
     {
         float3 wo = WorldToLocal(woWorld, onb), wi = WorldToLocal(wiWorld, onb);
-        if (wo.z == 0) return 0.;
+        if (wo.z == 0)
+            return 0.;
         float pdf = 0.f;
-        if (MatchesFlags(microRefl.type, flags))
+        if(sigma==0)
         {
-            pdf += microRefl.Pdf(wo, wi);
+            if (MatchesFlags(lambertianRefl.type, flags))
+            {
+                pdf = lambertianRefl.Pdf(wo, wi);
+            }
         }
-        if (MatchesFlags(microTrans.type, flags))
+        else if (MatchesFlags(orenNayarDiffuse.type, flags))
         {
-            pdf += microTrans.Pdf(wo, wi);
+            pdf = orenNayarDiffuse.Pdf(wo, wi);
         }
         return pdf;
     }
     
     Spectrum Sample_f(float3 woWorld, out float3 wiWorld, float2 u, out float pdf, BxDFType type, inout BxDFType sampledType, Onb onb)
-    {
-        int matchingComps = 2;
-        int comp = min(floor(u[0] * matchingComps), matchingComps - 1);
-        // Remap _BxDF_ sample _u_ to $[0,1)^2$
-        float2 uRemapped = float2(min(u[0] * matchingComps - comp, 0.999999), u[1]);
-        
-        // Sample chosen _BxDF_
+    {        
         float3 wi, wo = WorldToLocal(woWorld, onb);
-        if (wo.z == 0) return (float3) 0.;
+        if (wo.z == 0)
+            return (float3) 0.;
         pdf = 0;
-        float3 f;
-        if(comp==0)
+        Spectrum f;
+        if (sigma == 0)
         {
-            f = microRefl.Sample_f(wo, wi, uRemapped, pdf, sampledType);
-            sampledType = microRefl.type;
+            f = lambertianRefl.Sample_f(wo, wi, u, pdf, sampledType);
+            sampledType = lambertianRefl.type;
         }
         else
         {
-            f = microTrans.Sample_f(wo, wi, uRemapped, pdf, sampledType);
-            sampledType = microTrans.type;
+            f = orenNayarDiffuse.Sample_f(wo, wi, u, pdf, sampledType);
+            sampledType = orenNayarDiffuse.type;
         }
-        pdf /= matchingComps;
         wiWorld = LocalToWorld(wi, onb);
         return f;
     }
 };
 
-GlassMaterial createGlassMaterial(float3 R, float3 T, float urough, float vrough, float eta)
+MatteMaterial createMatteMaterial(Spectrum Kd, float sigma)
 {
-    GlassMaterial mat;
-    urough = RoughnessToAlpha(urough);
-    vrough = RoughnessToAlpha(vrough);
-        
-    TrowbridgeReitzDistribution distrib = createTrowbridgeReitzDistribution(urough, vrough);
-    FresnelDielectric fresnel = createFresnelDielectric(1, eta);
-        
-    mat.microRefl = createMicrofacetReflection(BSDF_REFLECTION | BSDF_GLOSSY, R, distrib, fresnel);
-    
-    mat.microTrans = createMicrofacetTransmission(BSDF_TRANSMISSION | BSDF_GLOSSY, T, 1.f, eta, distrib, fresnel);
-    
+    MatteMaterial mat;
+    mat.Kd = Kd;
+    mat.sigma = sigma;
+    if (sigma==0)
+    {
+        mat.lambertianRefl = createLambertianReflection(Kd);
+    }
+    else
+    {
+        mat.orenNayarDiffuse = createOrenNayar(Kd, sigma);
+    }
     return mat;
 }
 
-float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering, 
+float3 EstimateDirect(Interaction it, MatteMaterial mat, float2 uScattering,
                       AreaLight light, float2 uLight,
                       bool specular, Onb onb, float scene_epsilon)
 {
@@ -103,7 +103,7 @@ float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
     float lightPdf = 0, scatteringPdf = 0;
     float Ldist;
     float3 Li = light.Sample_Li(it, uLight, wi, lightPdf, Ldist);
-    if(lightPdf>0&&!isBlack(Li))
+    if (lightPdf > 0 && !isBlack(Li))
     {
         // Compute BSDF or phase function's value for light sample
         float3 f;
@@ -128,7 +128,7 @@ float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
     bool sampledSpecular = false;
     BxDFType sampledType;
     f = mat.Sample_f(it.wo, wi, uScattering, scatteringPdf, bsdfFlags, sampledType, onb);
-    if (!isBlack(f) && scatteringPdf>0)
+    if (!isBlack(f) && scatteringPdf > 0)
     {
         // Account for light contributions along sampled direction _wi_
         float weight = 1;
@@ -159,7 +159,7 @@ float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
 }
 
 [shader("closesthit")]
-void ClosestHit_GlassMaterial(inout RayPayload current_payload, Attributes attrib)
+void ClosestHit_MatteMaterial(inout RayPayload current_payload, Attributes attrib)
 {
     
     // Fetch UV
@@ -226,19 +226,13 @@ void ClosestHit_GlassMaterial(inout RayPayload current_payload, Attributes attri
     // Fecth data needed by BxDF from MaterialData
     int diffuseMapIdx = matData.DiffuseMapIdx;
     float3 baseColor = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb : matData.Albedo.rgb;
-    float3 transColor = matData.TransColor.rgb;
-    float3 F0 = matData.F0;
-    float eta = matData.RefraciveIndex;
     float3 emission = matData.Emission;
-    float roughness = (1 - matData.Smoothness);
+    float sigma = matData.Sigma;
     
     // Construct Material of Interact Surface
-    GlassMaterial mat = createGlassMaterial(
+    MatteMaterial mat = createMatteMaterial(
         baseColor,
-        transColor,
-        roughness,
-        roughness,
-        eta
+        sigma
     );
     
     // Construct SurfaceInteration

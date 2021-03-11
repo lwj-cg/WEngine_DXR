@@ -202,7 +202,8 @@ void ClosestHit_LambertianReflection(inout RayPayload current_payload, Attribute
     current_payload.direction = wiWorld;
     current_payload.attenuation = f * AbsDot(wiWorld, ffnormal) / pdf;
     current_payload.emission = emission;
-    current_payload.specularBounce = false;
+    BxDFType sampledType = BSDF_REFLECTION | BSDF_DIFFUSE;
+    current_payload.bxdfType = sampledType;
 
     if (isBlack(f) || pdf == 0.f)
         current_payload.done = true;

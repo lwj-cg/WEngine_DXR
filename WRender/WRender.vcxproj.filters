@@ -279,5 +279,17 @@
     <FxCompile Include="Shaders\RayTracing\Hit_SpecularBxDF.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_GlassSpecularMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\FresnelSpecular.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_MatteMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\OrenNayar.hlsl">
+      <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

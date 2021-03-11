@@ -197,6 +197,8 @@ private:
 	ComPtr<IDxcBlob> m_hitMicrofacetLibrary;
 	ComPtr<IDxcBlob> m_hitLambertianLibrary;
 	ComPtr<IDxcBlob> m_hitGlassLibrary;
+	ComPtr<IDxcBlob> m_hitGlassSpecularLibrary;
+	ComPtr<IDxcBlob> m_hitMatteLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
@@ -666,6 +668,7 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 			materialData.TransColor = m.TransColor;
 			materialData.F0 = m.F0;
 			materialData.RefractiveIndex = m.RefractiveIndex;
+			materialData.Sigma = m.Sigma;
 
 			currMaterialBuffer->CopyData(m.MatIdx, materialData);
 
@@ -678,7 +681,7 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 
 void MainApp::UpdateMainPassCB(const GameTimer& gt)
 {
-	++mNumStaticFrame %= 10000;
+	++mNumStaticFrame %= UINT32_MAX;
 
 	XMMATRIX view = mCamera.GetView();
 	XMMATRIX proj = mCamera.GetProj();
@@ -915,6 +918,14 @@ void MainApp::CreateTopLevelAS(
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
 					static_cast<UINT>(2 * 5));
+			else if (Shader == "GlassSpecularMaterial")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 6));
+			else if (Shader == "MatteMaterial")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 7));
 			else
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
@@ -1069,6 +1080,8 @@ void MainApp::CreateRayTracingPipeline()
 	m_hitMicrofacetLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MicrofacetBxDF.hlsl");
 	m_hitLambertianLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_LambertianBxDF.hlsl");
 	m_hitGlassLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_GlassMaterial.hlsl");
+	m_hitGlassSpecularLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_GlassSpecularMaterial.hlsl");
+	m_hitMatteLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MatteMaterial.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1086,6 +1099,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_FresnelSpecular" });
 	pipeline.AddLibrary(m_hitLambertianLibrary.Get(), { L"ClosestHit_LambertianReflection" });
 	pipeline.AddLibrary(m_hitGlassLibrary.Get(), { L"ClosestHit_GlassMaterial" });
+	pipeline.AddLibrary(m_hitGlassSpecularLibrary.Get(), { L"ClosestHit_GlassSpecularMaterial" });
+	pipeline.AddLibrary(m_hitMatteLibrary.Get(), { L"ClosestHit_MatteMaterial" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
@@ -1112,6 +1127,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddHitGroup(L"HitGroup_LambertianReflection", L"ClosestHit_LambertianReflection");
 	pipeline.AddHitGroup(L"HitGroup_FresnelSpecular", L"ClosestHit_FresnelSpecular");
 	pipeline.AddHitGroup(L"HitGroup_GlassMaterial", L"ClosestHit_GlassMaterial");
+	pipeline.AddHitGroup(L"HitGroup_GlassSpecularMaterial", L"ClosestHit_GlassSpecularMaterial");
+	pipeline.AddHitGroup(L"HitGroup_MatteMaterial", L"ClosestHit_MatteMaterial");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
@@ -1128,6 +1145,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_LambertianReflection" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_FresnelSpecular" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_GlassMaterial" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_GlassSpecularMaterial" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MatteMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
 	pipeline.AddRootSignatureAssociation(m_missShadowSignature.Get(), { L"Miss_Shadow" });
@@ -1435,6 +1454,42 @@ void MainApp::CreateShaderBindingTable() {
 			materialBufferPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_GlassMaterial",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_GlassSpecularMaterial",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_MatteMaterial",
 		{
 			objectBufferPointer,
 			materialBufferPointer,

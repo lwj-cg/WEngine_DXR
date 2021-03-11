@@ -47,7 +47,7 @@ float3 SpecularTransmission_Samplef(float3 wo /* from isect */, out float3 wi, c
     if (!refract(-wo, faceforward(float3(0, 0, 1), wo), etaI / etaT, wi))
         return 0;
     pdf = 1;
-    float3 ft = T * ((float3) 1.f) - FresnelTerm(F0, CosTheta(wi));
+    float3 ft = T * ((float3) 1.f - FresnelTerm(F0, CosTheta(wi)));
     return ft / AbsCosTheta(wi);
 }
 
@@ -184,7 +184,8 @@ void ClosestHit_SpecularReflection(inout RayPayload current_payload, Attributes 
     current_payload.direction = wiWorld;
     current_payload.attenuation = f * AbsDot(wiWorld, ffnormal) / pdf;
     current_payload.emission = emission;
-    current_payload.specularBounce = true;
+    BxDFType sampledType = BSDF_REFLECTION | BSDF_SPECULAR;
+    current_payload.bxdfType = sampledType;
 
     if (isBlack(f) || pdf == 0.f)
         current_payload.done = true;
@@ -279,7 +280,8 @@ void ClosestHit_SpecularTransmission(inout RayPayload current_payload, Attribute
     current_payload.direction = wiWorld;
     current_payload.attenuation = f * AbsDot(wiWorld, ffnormal) / pdf;
     current_payload.emission = emission;
-    current_payload.specularBounce = true;
+    BxDFType sampledType = BSDF_TRANSMISSION | BSDF_SPECULAR;
+    current_payload.bxdfType = sampledType;
 
     if (isBlack(f) || pdf == 0.f)
         current_payload.done = true;
@@ -372,7 +374,8 @@ void ClosestHit_FresnelSpecular(inout RayPayload current_payload, Attributes att
     current_payload.direction = wiWorld;
     current_payload.attenuation = f * AbsDot(wiWorld, ffnormal) / pdf;
     current_payload.emission = emission;
-    current_payload.specularBounce = true;
+    BxDFType sampledType = BSDF_REFLECTION | BSDF_TRANSMISSION | BSDF_SPECULAR;
+    current_payload.bxdfType = sampledType;
 
     if (isBlack(f) || pdf == 0.f)
         current_payload.done = true;

@@ -63,7 +63,7 @@ struct FresnelDielectric
     float etaT;
     float3 Evaluate(float cosThetaI)
     {
-        return FrDielectric(cosThetaI, etaI, etaT);
+        return (float3)  FrDielectric(cosThetaI, etaI, etaT);
     }
 };
 
@@ -91,6 +91,22 @@ DisneyFresnel createDisneyFresnel(float3 R0, float metallic, float eta)
     fr.R0 = R0;
     fr.metallic = metallic;
     fr.eta = eta;
+    return fr;
+}
+
+struct SchlickFresnel
+{
+    float3 R0;
+    float3 Evaluate(float cosI)
+    {
+        return FrSchlick(R0, cosI);
+    }
+};
+
+SchlickFresnel createSchlickFresnel(float3 R0)
+{
+    SchlickFresnel fr;
+    fr.R0 = R0;
     return fr;
 }
 

@@ -88,6 +88,12 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							float refractiveIndexVal = std::stof(refractiveIndexElem->GetText());
 							tmpMatData.RefractiveIndex = refractiveIndexVal;
 						}
+						tinyxml2::XMLElement* SigmaElem = materialNode->FirstChildElement("Sigma");
+						if (SigmaElem)
+						{
+							float Sigma = std::stof(SigmaElem->GetText());
+							tmpMatData.Sigma = Sigma;
+						}
 						tinyxml2::XMLElement* ShaderElem = materialNode->FirstChildElement("Shader");
 						if (ShaderElem)
 						{

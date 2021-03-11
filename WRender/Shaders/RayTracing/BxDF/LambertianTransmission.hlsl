@@ -9,7 +9,8 @@
 
 struct LambertianTransmission
 {
-    float3 T;
+    BxDFType type;
+    Spectrum T;
     float3 f(float3 wo, float3 wi)
     {
         return T * M_1_PI;
@@ -30,5 +31,13 @@ struct LambertianTransmission
         return f(wo, wi);
     }
 };
+
+LambertianTransmission createLambertianTransmission(Spectrum T, BxDFType type=BSDF_TRANSMISSION | BSDF_DIFFUSE)
+{
+    LambertianTransmission lambertianTrans;
+    lambertianTrans.type = type;
+    lambertianTrans.T = T;
+    return lambertianTrans;
+}
 
 #endif

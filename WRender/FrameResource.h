@@ -97,6 +97,7 @@ struct WMaterialData
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;
 	float RefractiveIndex = 1.5f;
+	float Sigma = 45.f;
 	int DiffuseMapIdx = -1;
 	int NormalMapIdx = -1;
 
@@ -131,6 +132,7 @@ struct WMaterial
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;
 	float RefractiveIndex = 1.5f;
+	float Sigma = 45.f;
 	int DiffuseMapIdx = -1;
 	int NormalMapIdx = -1;
 

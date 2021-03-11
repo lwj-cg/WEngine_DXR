@@ -70,7 +70,7 @@ void RayGen()
         payload.depth = 0;
         payload.seed = seed;
         payload.done = false;
-        payload.specularBounce = false;
+        payload.bxdfType = BSDF_ALL;
 
 		// Trace the ray (Hit group 1 : only diffuse)
 		// Each iteration is a segment of the ray path.  The closest hit will
@@ -78,20 +78,21 @@ void RayGen()
         float3 L = float3(0, 0, 0);
         float3 beta = float3(1, 1, 1);
         bool specularBounce = false;
-        for (int i = 0;; ++i)
+        for (int bounces = 0;; ++bounces)
         {
             RayDesc ray = make_Ray(origin, direction, scene_epsilon);
             // Trace the ray (Hit group 0 : default, Miss 0 : common miss)
             TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 0, 0, 0, ray, payload);
 
-            if (i == 0 || specularBounce)
+            // Possibly add emitted light at intersection
+            if (bounces == 0 || specularBounce)
             {
-                // We have hit the background or a luminaire
+                // Add emitted light at path vertex or from the environment
                 L += beta * payload.emission;
             }
             
             // Terminate path if ray escaped or _maxDepth_ was reached
-            if (payload.done || i >= max_depth)
+            if (payload.done || bounces >= max_depth)
                 break;
 
             float3 Ld = beta * payload.radiance;
@@ -102,11 +103,11 @@ void RayGen()
             beta *= payload.attenuation;
             origin = payload.origin;
             direction = payload.direction;
-            specularBounce = payload.specularBounce;
+            specularBounce = (payload.bxdfType & BSDF_SPECULAR)!=0;
             
             // Russian roulette termination 
             float3 rrBeta = beta;
-            if (i > rr_begin_depth)
+            if (bounces > rr_begin_depth)
             {
                 float q = max(.05f, 1 - MaxComponentValue(rrBeta));
                 if (rnd(payload.seed) < q)

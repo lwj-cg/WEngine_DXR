@@ -2,6 +2,7 @@
 #define COMMON_H_
 
 #include "fresnel.hlsl"
+#include "BxDF/BSDFCommon.hlsl"
 
 #define M_E        2.71828182845904523536   // e
 #define M_LOG2E    1.44269504088896340736   // log2(e)
@@ -31,8 +32,8 @@ struct RayPayload
     float3 emission;
 	uint seed;
 	uint depth;
+    BxDFType bxdfType;
     bool done;
-    bool specularBounce;
 };
 
 struct RayPayload_shadow
@@ -68,6 +69,7 @@ struct MaterialData
     float Smoothness;
     float Metallic;
     float RefraciveIndex;
+    float Sigma;
     int DiffuseMapIdx;
     int NormalMapIdx;
 };

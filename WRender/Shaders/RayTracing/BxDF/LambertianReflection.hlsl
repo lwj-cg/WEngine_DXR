@@ -9,8 +9,9 @@
 
 struct LambertianReflection
 {
-    float3 R;
-    float3 f(float3 wo, float3 wi)
+    BxDFType type;
+    Spectrum R;
+    Spectrum f(float3 wo, float3 wi)
     {
         return R * M_1_PI;
     }
@@ -30,5 +31,13 @@ struct LambertianReflection
         return f(wo, wi);
     }
 };
+
+LambertianReflection createLambertianReflection(Spectrum R, BxDFType type = BSDF_REFLECTION | BSDF_DIFFUSE)
+{
+    LambertianReflection lambertianRefl;
+    lambertianRefl.type = type;
+    lambertianRefl.R = R;
+    return lambertianRefl;
+}
 
 #endif
