@@ -3,12 +3,12 @@
 
 typedef uint BxDFType;
 
-static const uint BSDF_REFLECTION = 1 << 0;
-static const uint BSDF_TRANSMISSION = 1 << 1;
-static const uint BSDF_DIFFUSE = 1 << 2;
-static const uint BSDF_GLOSSY = 1 << 3;
-static const uint BSDF_SPECULAR = 1 << 4;
-static const uint BSDF_ALL = BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR | BSDF_REFLECTION |
+static const BxDFType BSDF_REFLECTION = 1 << 0;
+static const BxDFType BSDF_TRANSMISSION = 1 << 1;
+static const BxDFType BSDF_DIFFUSE = 1 << 2;
+static const BxDFType BSDF_GLOSSY = 1 << 3;
+static const BxDFType BSDF_SPECULAR = 1 << 4;
+static const BxDFType BSDF_ALL = BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR | BSDF_REFLECTION |
                BSDF_TRANSMISSION;
 
 // BSDF Inline Functions
@@ -64,6 +64,12 @@ inline float Cos2Phi(float3 w)
 inline float Sin2Phi(float3 w)
 {
     return SinPhi(w) * SinPhi(w);
+}
+
+inline float3 SphericalDirection(float sinTheta, float cosTheta, float phi)
+{
+    return float3(sinTheta * cos(phi), sinTheta * sin(phi),
+                    cosTheta);
 }
 
 bool MatchesFlags(BxDFType type, BxDFType t)

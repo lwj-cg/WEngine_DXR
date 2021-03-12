@@ -10,11 +10,11 @@
 struct MicrofacetReflection
 {
     BxDFType type; // BSDF_REFLECTION | BSDF_GLOSSY
-    float3 R;
+    Spectrum R;
     TrowbridgeReitzDistribution distribution;
     FresnelDielectric fresnel;
     
-    float3 f(float3 wo /* from isect */, float3 wi /* to light */)
+    Spectrum f(float3 wo /* from isect */, float3 wi /* to light */)
     {
         float cosThetaO = AbsCosTheta(wo), cosThetaI = AbsCosTheta(wi);
         float3 wh = wi + wo;
@@ -26,7 +26,7 @@ struct MicrofacetReflection
         wh = normalize(wh);
         // For the Fresnel call, make sure that wh is in the same hemisphere
         // as the surface normal, so that TIR is handled correctly.
-        float3 F = fresnel.Evaluate(dot(wi, faceforward(wh, float3(0, 0, 1))));
+        Spectrum F = fresnel.Evaluate(dot(wi, faceforward(wh, float3(0, 0, 1))));
         return R * distribution.D(wh) * distribution.G(wo, wi) * F /
            (4 * cosThetaI * cosThetaO);
     }
@@ -37,10 +37,9 @@ struct MicrofacetReflection
             return 0;
         float3 wh = normalize(wo + wi);
         return distribution.Pdf(wo, wh) / (4 * dot(wo, wh));
-
     }
     
-    float3 Sample_f(const float3 wo, out float3 wi, const float2 u, out float pdf, inout BxDFType sampledType)
+    Spectrum Sample_f(const float3 wo, out float3 wi, const float2 u, out float pdf, inout BxDFType sampledType)
     {
         // Sample microfacet orientation $\wh$ and reflected direction $\wi$
         if (wo.z == 0)
@@ -50,7 +49,7 @@ struct MicrofacetReflection
             return 0.; // Should be rare
         wi = reflect(wo, wh);
         if (!SameHemisphere(wo, wi))
-            return (float3) (0.f);
+            return (Spectrum) (0.f);
 
         // Compute PDF of _wi_ for microfacet reflection
         pdf = distribution.Pdf(wo, wh) / (4 * dot(wo, wh));
@@ -58,7 +57,7 @@ struct MicrofacetReflection
     }
 };
 
-MicrofacetReflection createMicrofacetReflection(BxDFType type, float3 R, TrowbridgeReitzDistribution distribution, FresnelDielectric fresnel)
+MicrofacetReflection createMicrofacetReflection(Spectrum R, TrowbridgeReitzDistribution distribution, FresnelDielectric fresnel, BxDFType type = BSDF_REFLECTION | BSDF_GLOSSY)
 {
     MicrofacetReflection microRefl;
     microRefl.type = type;

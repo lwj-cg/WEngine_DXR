@@ -108,7 +108,7 @@ void ClosestHit_GlassSpecularMaterial(inout RayPayload current_payload, Attribut
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = world_shading_normal;
+        ffnormal = normalize(world_shading_normal);
     }
     else
     {
@@ -117,7 +117,7 @@ void ClosestHit_GlassSpecularMaterial(inout RayPayload current_payload, Attribut
         float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
         float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = world_shading_normal;
+        ffnormal = normalize(world_shading_normal);
     }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();

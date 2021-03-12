@@ -195,7 +195,7 @@ void ClosestHit_Default(inout RayPayload current_payload, Attributes attrib)
             // Note: bias both ends of the shadow ray, in case the light is also present as geometry in the scene.
             RayDesc shadow_ray = make_Ray(hitpoint, L, scene_epsilon, Ldist - scene_epsilon);
             // Trace the ray (Hit group 2 : shadow ray, Miss 1 : shadow miss)
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
 
             if (shadow_payload.inShadow != 0)
             {

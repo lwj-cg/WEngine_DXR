@@ -32,7 +32,7 @@ struct SpecularTransmission
     
         pdf = 1;
         // Compute ray direction for specular transmission
-        if (!refract(-wo, faceforward(float3(0, 0, 1), wo), etaI / etaT, wi))
+        if (!refract(wo, faceforward(float3(0, 0, 1), wo), etaI / etaT, wi))
             return 0;
         Spectrum ft = T * ((float3) 1.f - fresnel.Evaluate(CosTheta(wi)));
         //// Account for non-symmetry with transmission to different medium

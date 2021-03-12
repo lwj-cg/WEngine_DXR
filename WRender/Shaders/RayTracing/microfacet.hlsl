@@ -97,13 +97,11 @@ struct TrowbridgeReitzDistribution
         if (isinf(tan2Theta))
             return 0.;
         const float cos4Theta = Cos2Theta(wh) * Cos2Theta(wh);
-        float e =
-        (Cos2Phi(wh) / (alphax * alphax) + Sin2Phi(wh) / (alphay * alphay)) *
-        tan2Theta;
+        float e = (Cos2Phi(wh) / (alphax * alphax) + Sin2Phi(wh) / (alphay * alphay)) * tan2Theta;
         return 1 / (M_PI * alphax * alphay * cos4Theta * (1 + e) * (1 + e));
     }
     
-    float Lambda(float3 w, float alphax, float alphay)
+    float Lambda(float3 w)
     {
         float absTanTheta = abs(TanTheta(w));
         if (isinf(absTanTheta))
@@ -118,12 +116,12 @@ struct TrowbridgeReitzDistribution
     float G1(float3 w)
     {
         //    if (Dot(w, wh) * CosTheta(w) < 0.) return 0.;
-        return 1 / (1 + Lambda(w, alphax, alphay));
+        return 1 / (1 + Lambda(w));
     }
 
     float G(float3 wo, float3 wi)
     {
-        return 1 / (1 + Lambda(wo, alphax, alphay) + Lambda(wi, alphax, alphay));
+        return 1 / (1 + Lambda(wo) + Lambda(wi));
     }
     
     float3 Sample_wh(float3 wo, float2 u)
@@ -148,6 +146,99 @@ TrowbridgeReitzDistribution createTrowbridgeReitzDistribution(float alphax, floa
     distrib.alphax = alphax;
     distrib.alphay = alphay;
     return distrib;
+}
+
+struct BeckmannDistribution
+{
+    float alphax;
+    float alphay;
+    
+    float D(const float3 wh)
+    {
+        float tan2Theta = Tan2Theta(wh);
+        if (isinf(tan2Theta))
+            return 0.;
+        float cos4Theta = Cos2Theta(wh) * Cos2Theta(wh);
+        return exp(-tan2Theta * (Cos2Phi(wh) / (alphax * alphax) +
+                                  Sin2Phi(wh) / (alphay * alphay))) /
+           (M_PI * alphax * alphay * cos4Theta);
+    }
+    
+    float Lambda(float3 w)
+    {
+        float absTanTheta = abs(TanTheta(w));
+        if (isinf(absTanTheta))
+            return 0.;
+        
+        // Compute _alpha_ for direction _w_
+        float alpha =
+            sqrt(Cos2Phi(w) * alphax * alphax + Sin2Phi(w) * alphay * alphay);
+        float a = 1 / (alpha * absTanTheta);
+        if (a >= 1.6f)
+            return 0;
+        return (1 - 1.259f * a + 0.396f * a * a) / (3.535f * a + 2.181f * a * a);
+    }
+    
+    float G1(float3 w)
+    {
+        //    if (Dot(w, wh) * CosTheta(w) < 0.) return 0.;
+        return 1 / (1 + Lambda(w));
+    }
+
+    float G(float3 wo, float3 wi)
+    {
+        return 1 / (1 + Lambda(wo) + Lambda(wi));
+    }
+    
+    float3 Sample_wh(const float3 wo, const float2 u)
+    {
+        // Sample full distribution of normals for Beckmann distribution
+
+        // Compute $\tan^2 \theta$ and $\phi$ for Beckmann distribution sample
+        float tan2Theta, phi;
+        if (alphax == alphay)
+        {
+            float logSample = log(1 - u[0]);
+            tan2Theta = -alphax * alphax * logSample;
+            phi = u[1] * 2 * M_PI;
+        }
+        else
+        {
+            // Compute _tan2Theta_ and _phi_ for anisotropic Beckmann
+            // distribution
+            float logSample = log(1 - u[0]);
+            phi = atan(alphay / alphax *
+                            tan(2 * M_PI * u[1] + 0.5f * M_PI));
+            if (u[1] > 0.5f)
+                phi += M_PI;
+            float sinPhi = sin(phi), cosPhi = cos(phi);
+            float alphax2 = alphax * alphax, alphay2 = alphay * alphay;
+            tan2Theta = -logSample /
+                        (cosPhi * cosPhi / alphax2 + sinPhi * sinPhi / alphay2);
+        }
+
+        // Map sampled Beckmann angles to normal direction _wh_
+        float cosTheta = 1 / sqrt(1 + tan2Theta);
+        float sinTheta = sqrt(max((float) 0, 1 - cosTheta * cosTheta));
+        float3 wh = SphericalDirection(sinTheta, cosTheta, phi);
+        if (!SameHemisphere(wo, wh))
+            wh = -wh;
+        return wh;
+    }
+    
+    float Pdf(const float3 wo, const float3 wh)
+    {
+        return D(wh) * G1(wo) * AbsDot(wo, wh) / AbsCosTheta(wo);
+    }
+};
+
+BeckmannDistribution createBeckmannDistribution(float alphax, float alphay)
+{
+    BeckmannDistribution distrib;
+    distrib.alphax = max(0.001f, alphax);
+    distrib.alphay = max(0.001f, alphay);
+    return distrib;
+
 }
 
 #endif

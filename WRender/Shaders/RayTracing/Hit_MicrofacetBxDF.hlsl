@@ -256,7 +256,7 @@ float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLi
             RayPayload_shadow shadow_payload;
             shadow_payload.inShadow = 1;
             RayDesc shadow_ray = make_Ray(it.p, wiWorld, scene_epsilon, Ldist - scene_epsilon);
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
             if (shadow_payload.inShadow != 0)
             {
                 float weight = PowerHeuristic(1, lightPdf, 1, scatteringPdf);
@@ -293,7 +293,7 @@ float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLi
         bool isIntersect = Parallelogram_Intersect(isect_ray, light.corner, light.normal, light.v1, light.v2, tHit, hit_point, Ldist);
         RayDesc shadow_ray = make_Ray(it.p, wiWorld, scene_epsilon, Ldist - scene_epsilon);
         
-        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
         float3 Li = (float3) 0.f;
         if (shadow_payload.inShadow != 0)
         {

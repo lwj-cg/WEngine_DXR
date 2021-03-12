@@ -681,7 +681,7 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 
 void MainApp::UpdateMainPassCB(const GameTimer& gt)
 {
-	++mNumStaticFrame %= UINT32_MAX;
+	++mNumStaticFrame %= 10000000;
 
 	XMMATRIX view = mCamera.GetView();
 	XMMATRIX proj = mCamera.GetProj();
@@ -1507,6 +1507,7 @@ void MainApp::CreateShaderBindingTable() {
 			objectBufferPointer,
 			materialBufferPointer
 		});
+	
 
 	// Compute the size of the SBT given the number of shaders and their
   // parameters

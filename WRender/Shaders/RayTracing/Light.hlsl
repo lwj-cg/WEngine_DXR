@@ -108,7 +108,7 @@ struct AreaLight
         return it;
     }
     
-    float3 L(Interaction intr, float3 w /* from light */)
+    float3 L(Interaction intr, const float3 w /* from light */)
     {
         return (twoSided || dot(intr.n, w) > 0) ? emission : (float3) 0.f;
     }

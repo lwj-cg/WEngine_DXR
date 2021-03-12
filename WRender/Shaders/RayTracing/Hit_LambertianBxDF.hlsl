@@ -4,33 +4,13 @@
 #include "HitCommon.hlsl"
 #include "Sampling.hlsl"
 #include "BxDF/BSDFCommon.hlsl"
+#include "BxDF/LambertianReflection.hlsl"
 #include "PBR.hlsl"
 #include "Light.hlsl"
 #include "Intersection.hlsl"
 
-float LambertianReflection_Pdf(float3 wo, float3 wi)
-{
-    return SameHemisphere(wo, wi) ? AbsCosTheta(wi) * M_1_PI : 0;
-}
-
-float3 LambertianReflection_f(float3 wo, float3 wi, float3 R)
-{
-    return R * M_1_PI;
-}
-
-Spectrum LambertianReflection_Samplef(float3 wo, out float3 wi, const float2 u,
-                        out float pdf, float3 R)
-{
-    // Cosine-sample the hemisphere, flipping the direction if necessary
-    CosineSampleHemisphere(u, wi);
-    if (wo.z < 0)
-        wi.z *= -1;
-    pdf = LambertianReflection_Pdf(wo, wi);
-    return LambertianReflection_f(wo, wi, R);
-}
-
 // Multiple Importance Sampling
-float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLight light, float2 uLight, bool specular, Onb onb)
+float3 EstimateDirect(Interaction it, LambertianReflection lambertRefl, float2 uScattering, AreaLight light, float2 uLight, bool specular, Onb onb, Spectrum baseColor)
 {
     float scene_epsilon = 0.001f;
     uint bsdfFlags = specular ? BSDF_ALL : BSDF_ALL & ~BSDF_SPECULAR;
@@ -39,19 +19,19 @@ float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLi
     float3 wiWorld;
     float3 wo = WorldToLocal(it.wo, onb);
     float lightPdf = 0, scatteringPdf = 0, Ldist;
-    float3 Li = ParallelogramLight_SampleLi(light, it.p, uLight, wiWorld, lightPdf, Ldist);
+    float3 Li = light.Sample_Li(it, uLight, wiWorld, lightPdf, Ldist);
     if (lightPdf > 0 && !isBlack(Li))
     {
         float3 wi = WorldToLocal(wiWorld, onb);
-        float3 f = LambertianReflection_f(wo, wi, it.baseColor) * AbsCosTheta(wi);
-        scatteringPdf = LambertianReflection_Pdf(wo, wi);
+        float3 f = lambertRefl.f(wo, wi) * AbsCosTheta(wi);
+        scatteringPdf = lambertRefl.Pdf(wo, wi);
         if (!isBlack(f))
         {
             // Cast Shadow Ray
             RayPayload_shadow shadow_payload;
             shadow_payload.inShadow = 1;
             RayDesc shadow_ray = make_Ray(it.p, wiWorld, scene_epsilon, Ldist - scene_epsilon);
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
             if (shadow_payload.inShadow != 0)
             {
                 float weight = PowerHeuristic(1, lightPdf, 1, scatteringPdf);
@@ -66,7 +46,7 @@ float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLi
     // Sample scattered direction for surface interactions
     BxDFType sampledType;
     float3 wi;
-    f = LambertianReflection_Samplef(wo, wi, uScattering, scatteringPdf, it.baseColor);
+    f = lambertRefl.Sample_f(wo, wi, uScattering, scatteringPdf, sampledType);
     wiWorld = LocalToWorld(wi, onb);
     f *= AbsCosTheta(wi);
     if (!isBlack(f) && scatteringPdf > 0)
@@ -74,25 +54,28 @@ float3 EstimateDirect(SurfaceInteraction it, float2 uScattering, ParallelogramLi
         // Account for light contributions along sampled direction _wi_
         float weight = 1;
 
-        lightPdf = ParallelogramLight_PdfLi(light, it.p, wiWorld);
+        lightPdf = light.Pdf_Li(it, wi);
         if (lightPdf == 0)
             return Ld;
         weight = PowerHeuristic(1, scatteringPdf, 1, lightPdf);
+        
+        // Add light contribution from material sampling
+        RayDesc testRay = make_Ray(it.p, wiWorld);
+        float tHit;
+        Interaction isectLight;
+        light.Intersect(testRay, tHit, isectLight);
+        float Ldist = distance(isectLight.p, it.p);
         
         // Find intersection (Cast Shadow Ray)
         RayPayload_shadow shadow_payload;
         shadow_payload.inShadow = 1;
         float3 hit_point;
-        float tHit, Ldist;
-        RayDesc isect_ray = make_Ray(it.p, wiWorld);
-        bool isIntersect = Parallelogram_Intersect(isect_ray, light.corner, light.normal, light.v1, light.v2, tHit, hit_point, Ldist);
         RayDesc shadow_ray = make_Ray(it.p, wiWorld, scene_epsilon, Ldist - scene_epsilon);
-        
-        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
         float3 Li = (float3) 0.f;
         if (shadow_payload.inShadow != 0)
         {
-            Li = ParallelogramLight_L(light, -wiWorld);
+            Li = light.L(it, -wi);
             Ld += f * Li * weight / scatteringPdf;
         }
 
@@ -175,19 +158,20 @@ void ClosestHit_LambertianReflection(inout RayPayload current_payload, Attribute
     float3 emission = matData.Emission;
     
     // Construct SurfaceInteration
-    SurfaceInteraction it;
-    it.p = hitpoint;
-    it.wo = -ray_direction;
-    it.n = ffnormal;
-    it.baseColor = baseColor;
-    it.F0 = F0;
+    Interaction it = createInteraction(hitpoint, -ray_direction, ffnormal, world_geometric_normal);
     
     // Construct Reflection Coord System
     Onb onb;
     create_onb(ffnormal, onb);
     
+    // Construct Lambertian Reflection
+    LambertianReflection lambertRefl = createLambertianReflection(baseColor);
+    
+    // Construct Light
+    AreaLight light = createAreaLight(gLightBuffer[0]);
+    
     // Estimate direct light
-    float3 Ld = EstimateDirect(it, uScattering, gLightBuffer[0], uLight, false, onb);
+    float3 Ld = EstimateDirect(it, lambertRefl, uScattering, light, uLight, false, onb, baseColor);
     current_payload.radiance = Ld;
 
     // Sample BSDF to get new path direction
@@ -196,13 +180,13 @@ void ClosestHit_LambertianReflection(inout RayPayload current_payload, Attribute
     float u2 = rnd(current_payload.seed);
     float2 u = float2(u1, u2);
     float pdf;
-    float3 f = LambertianReflection_Samplef(wo, wi, u, pdf, it.baseColor);
+    BxDFType sampledType;
+    float3 f = lambertRefl.Sample_f(wo, wi, u, pdf, sampledType);
     float3 wiWorld = LocalToWorld(wi, onb);
     current_payload.origin = hitpoint;
     current_payload.direction = wiWorld;
     current_payload.attenuation = f * AbsDot(wiWorld, ffnormal) / pdf;
     current_payload.emission = emission;
-    BxDFType sampledType = BSDF_REFLECTION | BSDF_DIFFUSE;
     current_payload.bxdfType = sampledType;
 
     if (isBlack(f) || pdf == 0.f)

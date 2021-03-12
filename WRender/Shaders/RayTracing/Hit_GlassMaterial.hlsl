@@ -10,14 +10,15 @@
 #include "Random.hlsl"
 
 struct GlassMaterial
-{    
+{
     MicrofacetReflection microRefl;
     MicrofacetTransmission microTrans;
         
     Spectrum f(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb, float3 ng)
     {
         float3 wo = WorldToLocal(woWorld, onb), wi = WorldToLocal(wiWorld, onb);
-        if (wo.z == 0) return 0.;
+        if (wo.z == 0)
+            return 0.;
         float pdf = 0.f;
         bool reflect = dot(wiWorld, ng) * dot(woWorld, ng) > 0;
         float3 f = (float3) 0.f;
@@ -34,17 +35,22 @@ struct GlassMaterial
     
     float Pdf(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb)
     {
+        int matchingComps = 0;
         float3 wo = WorldToLocal(woWorld, onb), wi = WorldToLocal(wiWorld, onb);
-        if (wo.z == 0) return 0.;
+        if (wo.z == 0)
+            return 0.;
         float pdf = 0.f;
         if (MatchesFlags(microRefl.type, flags))
         {
             pdf += microRefl.Pdf(wo, wi);
+            ++matchingComps;
         }
         if (MatchesFlags(microTrans.type, flags))
         {
             pdf += microTrans.Pdf(wo, wi);
+            ++matchingComps;
         }
+        pdf /= matchingComps;
         return pdf;
     }
     
@@ -57,10 +63,11 @@ struct GlassMaterial
         
         // Sample chosen _BxDF_
         float3 wi, wo = WorldToLocal(woWorld, onb);
-        if (wo.z == 0) return (float3) 0.;
+        if (wo.z == 0)
+            return (Spectrum) 0.;
         pdf = 0;
         float3 f;
-        if(comp==0)
+        if (comp == 0)
         {
             f = microRefl.Sample_f(wo, wi, uRemapped, pdf, sampledType);
             sampledType = microRefl.type;
@@ -70,8 +77,8 @@ struct GlassMaterial
             f = microTrans.Sample_f(wo, wi, uRemapped, pdf, sampledType);
             sampledType = microTrans.type;
         }
-        pdf /= matchingComps;
         wiWorld = LocalToWorld(wi, onb);
+        pdf /= matchingComps;
         return f;
     }
 };
@@ -83,30 +90,31 @@ GlassMaterial createGlassMaterial(float3 R, float3 T, float urough, float vrough
     vrough = RoughnessToAlpha(vrough);
         
     TrowbridgeReitzDistribution distrib = createTrowbridgeReitzDistribution(urough, vrough);
+    //BeckmannDistribution distrib = createBeckmannDistribution(urough, vrough);
     FresnelDielectric fresnel = createFresnelDielectric(1, eta);
         
-    mat.microRefl = createMicrofacetReflection(BSDF_REFLECTION | BSDF_GLOSSY, R, distrib, fresnel);
+    mat.microRefl = createMicrofacetReflection(R, distrib, fresnel);
     
-    mat.microTrans = createMicrofacetTransmission(BSDF_TRANSMISSION | BSDF_GLOSSY, T, 1.f, eta, distrib, fresnel);
+    mat.microTrans = createMicrofacetTransmission(T, 1.f, eta, distrib, fresnel);
     
     return mat;
 }
 
-float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering, 
+Spectrum EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
                       AreaLight light, float2 uLight,
                       bool specular, Onb onb, float scene_epsilon)
 {
     BxDFType bsdfFlags = specular ? BSDF_ALL : BSDF_ALL & ~BSDF_SPECULAR;
-    float3 Ld = (float3) 0.f;
+    Spectrum Ld = (Spectrum) 0.f;
     // Sample light source with multiple importance sampling
     float3 wi;
     float lightPdf = 0, scatteringPdf = 0;
     float Ldist;
     float3 Li = light.Sample_Li(it, uLight, wi, lightPdf, Ldist);
-    if(lightPdf>0&&!isBlack(Li))
+    if (lightPdf > 0 && !isBlack(Li))
     {
         // Compute BSDF or phase function's value for light sample
-        float3 f;
+        Spectrum f;
         f = mat.f(it.wo, wi, bsdfFlags, onb, it.ng) * AbsDot(wi, it.n);
         scatteringPdf = mat.Pdf(it.wo, wi, bsdfFlags, onb);
         if (!isBlack(f))
@@ -115,7 +123,7 @@ float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
             RayPayload_shadow shadow_payload;
             shadow_payload.inShadow = 1;
             RayDesc shadow_ray = make_Ray(it.p, wi, scene_epsilon, Ldist - scene_epsilon);
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
             if (shadow_payload.inShadow != 0)
             {
                 float weight = PowerHeuristic(1, lightPdf, 1, scatteringPdf);
@@ -124,11 +132,11 @@ float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
         }
     }
     // Sample BSDF with multiple importance sampling
-    float3 f;
+    Spectrum f;
     bool sampledSpecular = false;
     BxDFType sampledType;
     f = mat.Sample_f(it.wo, wi, uScattering, scatteringPdf, bsdfFlags, sampledType, onb);
-    if (!isBlack(f) && scatteringPdf>0)
+    if (!isBlack(f) && scatteringPdf > 0)
     {
         // Account for light contributions along sampled direction _wi_
         float weight = 1;
@@ -146,9 +154,10 @@ float3 EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
         
         // Cast Shadow Ray
         RayPayload_shadow shadow_payload;
+        shadow_payload.inShadow = 1;
         RayDesc shadow_ray = make_Ray(it.p, wi, scene_epsilon, Ldist - scene_epsilon);
-        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
-        float3 Li = (float3) 0.f;
+        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
+        Spectrum Li = (Spectrum) 0.f;
         if (shadow_payload.inShadow != 0)
         {
             Li = light.L(it, -wi);
@@ -253,7 +262,7 @@ void ClosestHit_GlassMaterial(inout RayPayload current_payload, Attributes attri
     
     // Estimate direct light
     float scene_epsilon = 0.001f;
-    float3 Ld = EstimateDirect(it, mat, uScattering, light, uLight, false, onb, scene_epsilon);
+    Spectrum Ld = EstimateDirect(it, mat, uScattering, light, uLight, false, onb, scene_epsilon);
     current_payload.radiance = Ld;
 
     // Sample BSDF to get new path direction

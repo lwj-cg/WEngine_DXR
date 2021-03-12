@@ -81,23 +81,17 @@ MatteMaterial createMatteMaterial(Spectrum Kd, float sigma)
     MatteMaterial mat;
     mat.Kd = Kd;
     mat.sigma = sigma;
-    if (sigma==0)
-    {
-        mat.lambertianRefl = createLambertianReflection(Kd);
-    }
-    else
-    {
-        mat.orenNayarDiffuse = createOrenNayar(Kd, sigma);
-    }
+    mat.lambertianRefl = createLambertianReflection(Kd);
+    mat.orenNayarDiffuse = createOrenNayar(Kd, sigma);
     return mat;
 }
 
-float3 EstimateDirect(Interaction it, MatteMaterial mat, float2 uScattering,
+Spectrum EstimateDirect(Interaction it, MatteMaterial mat, float2 uScattering,
                       AreaLight light, float2 uLight,
                       bool specular, Onb onb, float scene_epsilon)
 {
     BxDFType bsdfFlags = specular ? BSDF_ALL : BSDF_ALL & ~BSDF_SPECULAR;
-    float3 Ld = (float3) 0.f;
+    Spectrum Ld = (Spectrum) 0.f;
     // Sample light source with multiple importance sampling
     float3 wi;
     float lightPdf = 0, scatteringPdf = 0;
@@ -106,7 +100,7 @@ float3 EstimateDirect(Interaction it, MatteMaterial mat, float2 uScattering,
     if (lightPdf > 0 && !isBlack(Li))
     {
         // Compute BSDF or phase function's value for light sample
-        float3 f;
+        Spectrum f;
         f = mat.f(it.wo, wi, bsdfFlags, onb, it.ng) * AbsDot(wi, it.n);
         scatteringPdf = mat.Pdf(it.wo, wi, bsdfFlags, onb);
         if (!isBlack(f))
@@ -115,7 +109,7 @@ float3 EstimateDirect(Interaction it, MatteMaterial mat, float2 uScattering,
             RayPayload_shadow shadow_payload;
             shadow_payload.inShadow = 1;
             RayDesc shadow_ray = make_Ray(it.p, wi, scene_epsilon, Ldist - scene_epsilon);
-            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
+            TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
             if (shadow_payload.inShadow != 0)
             {
                 float weight = PowerHeuristic(1, lightPdf, 1, scatteringPdf);
@@ -146,9 +140,10 @@ float3 EstimateDirect(Interaction it, MatteMaterial mat, float2 uScattering,
         
         // Cast Shadow Ray
         RayPayload_shadow shadow_payload;
+        shadow_payload.inShadow = 1;
         RayDesc shadow_ray = make_Ray(it.p, wi, scene_epsilon, Ldist - scene_epsilon);
-        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 2, 0, 1, shadow_ray, shadow_payload);
-        float3 Li = (float3) 0.f;
+        TraceRay(SceneBVH, RAY_FLAG_NONE, 0xFF, 1, 0, 1, shadow_ray, shadow_payload);
+        Spectrum Li = (Spectrum) 0.f;
         if (shadow_payload.inShadow != 0)
         {
             Li = light.L(it, -wi);
@@ -203,7 +198,7 @@ void ClosestHit_MatteMaterial(inout RayPayload current_payload, Attributes attri
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = world_shading_normal;
+        ffnormal = normalize(world_shading_normal);
     }
     else
     {
@@ -212,8 +207,9 @@ void ClosestHit_MatteMaterial(inout RayPayload current_payload, Attributes attri
         float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
         float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = world_shading_normal;
+        ffnormal = normalize(world_shading_normal);
     }
+    //ffnormal = world_geometric_normal;
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     float uLight1 = rnd(current_payload.seed);
@@ -247,7 +243,7 @@ void ClosestHit_MatteMaterial(inout RayPayload current_payload, Attributes attri
     
     // Estimate direct light
     float scene_epsilon = 0.001f;
-    float3 Ld = EstimateDirect(it, mat, uScattering, light, uLight, false, onb, scene_epsilon);
+    Spectrum Ld = EstimateDirect(it, mat, uScattering, light, uLight, false, onb, scene_epsilon);
     current_payload.radiance = Ld;
 
     // Sample BSDF to get new path direction

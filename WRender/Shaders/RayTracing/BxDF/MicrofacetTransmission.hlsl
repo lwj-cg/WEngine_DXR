@@ -10,7 +10,7 @@
 struct MicrofacetTransmission
 {
     BxDFType type; // BSDF_TRANSMISSION | BSDF_GLOSSY
-    float3 T;
+    Spectrum T;
     float etaA;
     float etaB;
     TrowbridgeReitzDistribution distribution;
@@ -42,7 +42,7 @@ struct MicrofacetTransmission
         float factor = 1;
         //float factor = (mode == TransportMode::Radiance) ? (1 / eta) : 1;
 
-        return ((float3) (1.f) - F) * T *
+        return ((Spectrum) (1.f) - F) * T *
            abs(distribution.D(wh) * distribution.G(wo, wi) * eta * eta *
                     AbsDot(wi, wh) * AbsDot(wo, wh) * factor * factor /
                     (cosThetaI * cosThetaO * sqrtDenom * sqrtDenom));
@@ -81,8 +81,8 @@ struct MicrofacetTransmission
     }
 };
 
-MicrofacetTransmission createMicrofacetTransmission(BxDFType type, float3 T, float etaA, float etaB, 
-    TrowbridgeReitzDistribution distribution, FresnelDielectric fresnel)
+MicrofacetTransmission createMicrofacetTransmission(Spectrum T, float etaA, float etaB, 
+    TrowbridgeReitzDistribution distribution, FresnelDielectric fresnel, BxDFType type = BSDF_TRANSMISSION | BSDF_GLOSSY)
 {
     MicrofacetTransmission microTrans;
     microTrans.type = type;

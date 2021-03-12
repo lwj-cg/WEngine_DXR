@@ -127,7 +127,7 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat("RefractiveIndex##value", &m.RefractiveIndex, 0.01f, 1, 2.5))
+	if (ImGui::DragFloat("RefractiveIndex##value", &m.RefractiveIndex, 0.01f, 0.1, 5.5))
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Sigma##value", &m.Sigma, 0.1f, 0, 90))
 		m.NumFramesDirty = gNumFrameResources;
