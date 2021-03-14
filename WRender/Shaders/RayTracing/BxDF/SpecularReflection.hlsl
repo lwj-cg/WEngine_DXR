@@ -9,7 +9,7 @@ struct SpecularReflection
 {
     BxDFType type; // BSDF_REFLECTION | BSDF_SPECULAR
     Spectrum R;
-    FresnelDielectric fresnel;
+    UberFresnel fresnel;
     float3 f(float3 wo, float3 wi)
     {
         return (float3) 0.f;
@@ -30,7 +30,7 @@ struct SpecularReflection
     }
 };
 
-SpecularReflection createSpecularReflection(float3 R, FresnelDielectric fresnel, BxDFType type = BSDF_REFLECTION|BSDF_SPECULAR)
+SpecularReflection createSpecularReflection(float3 R, UberFresnel fresnel, BxDFType type = BSDF_REFLECTION|BSDF_SPECULAR)
 {
     SpecularReflection SpecRefl;
     SpecRefl.type = type;

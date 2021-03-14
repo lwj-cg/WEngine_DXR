@@ -2,16 +2,15 @@
 #include "BxDF/BSDFCommon.hlsl"
 #include "BxDF/FresnelSpecular.hlsl"
 #include "BxDF/SpecularReflection.hlsl"
-#include "BxDF/SpecularTransmission.hlsl"
 #include "microfacet.hlsl"
 #include "Helpers.hlsl"
 #include "Light.hlsl"
 #include "Random.hlsl"
+#include "fresnel.hlsl"
 
-struct GlassSpecularMaterial
+struct MirrorMaterial
 {
     SpecularReflection specRefl;
-    SpecularTransmission specTrans;
     
     Spectrum f(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb, float3 ng)
     {
@@ -25,47 +24,30 @@ struct GlassSpecularMaterial
     
     Spectrum Sample_f(float3 woWorld, out float3 wiWorld, float2 u, out float pdf, BxDFType type, inout BxDFType sampledType, Onb onb)
     {
-        int matchingComps = 2;
-        int comp = min(floor(u[0] * matchingComps), matchingComps - 1);
-        // Remap _BxDF_ sample _u_ to $[0,1)^2$
-        float2 uRemapped = float2(min(u[0] * matchingComps - comp, 0.999999), u[1]);
         
         // Sample chosen _BxDF_
         float3 wi, wo = WorldToLocal(woWorld, onb);
-        //if (wo.z == 0)
-        //    return (float3) 0.;
+        if (wo.z == 0)
+            return (Spectrum) 0.;
         pdf = 0;
         float3 f;
-        if (comp == 0)
-        {
-            f = specRefl.Sample_f(wo, wi, uRemapped, pdf, sampledType);
-            sampledType = specRefl.type;
-        }
-        else
-        {
-            f = specTrans.Sample_f(wo, wi, uRemapped, pdf, sampledType);
-            sampledType = specTrans.type;
-        }
-        pdf /= matchingComps;
+        f = specRefl.Sample_f(wo, wi, u, pdf, sampledType);
+        sampledType = specRefl.type;
         wiWorld = LocalToWorld(wi, onb);
         return f;
     }
 };
 
-GlassSpecularMaterial createGlassSpecularMaterial(float3 R, float3 T, float eta)
+MirrorMaterial createMirrorMaterial(Spectrum R)
 {
-    GlassSpecularMaterial mat;
-    UberFresnel uFresnel = createFresnel(1, eta);
-    FresnelDielectric fresnel = createFresnelDielectric(1, eta);
-    
-    mat.specRefl = createSpecularReflection(R, uFresnel);
-    mat.specTrans = createSpecularTransmission(T, 1, eta, fresnel);
-    
+    MirrorMaterial mat;
+    UberFresnel fresnel = createFresnel();
+    mat.specRefl = createSpecularReflection(R, fresnel);
     return mat;
 }
 
 [shader("closesthit")]
-void ClosestHit_GlassSpecularMaterial(inout RayPayload current_payload, Attributes attrib)
+void ClosestHit_MirrorMaterial(inout RayPayload current_payload, Attributes attrib)
 {
     
     // Fetch UV
@@ -126,15 +108,11 @@ void ClosestHit_GlassSpecularMaterial(inout RayPayload current_payload, Attribut
     // Fecth data needed by BxDF from MaterialData
     int diffuseMapIdx = matData.DiffuseMapIdx;
     float3 R = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb : matData.Albedo.rgb;
-    float3 T = matData.TransColor.rgb;
-    float eta = matData.RefraciveIndex;
     float3 emission = matData.Emission;
     
     // Construct Material of Interact Surface
-    GlassSpecularMaterial mat = createGlassSpecularMaterial(
-        R,
-        T,
-        eta
+    MirrorMaterial mat = createMirrorMaterial(
+        R
     );
     
     // Construct SurfaceInteration

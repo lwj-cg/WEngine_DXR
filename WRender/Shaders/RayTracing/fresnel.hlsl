@@ -158,4 +158,65 @@ FresnelConductor createFresnelConductor(Spectrum etaI, Spectrum etaT, Spectrum k
     return fr;
 }
 
+typedef uint FRESNEL_TYPE;
+static const FRESNEL_TYPE FRESNEL_DIELECTRIC = 1 << 0;
+static const FRESNEL_TYPE FRESNEL_CONDUCTOR = 1 << 1;
+static const FRESNEL_TYPE DISNEY_FRESNEL = 1 << 2;
+static const FRESNEL_TYPE FRESNEL_NOOP = 1 << 3;
+
+struct UberFresnel
+{
+    // For dielectric
+    float etaA;
+    float etaB;
+    // For conductor
+    Spectrum etaI;
+    Spectrum etaT;
+    Spectrum k;
+    // Type
+    FRESNEL_TYPE type;
+    
+    Spectrum Evaluate(float cosThetaI)
+    {
+        if (type&FRESNEL_DIELECTRIC)
+        {
+            return FrDielectric(cosThetaI, etaA, etaB);
+        }
+        else if (type&FRESNEL_CONDUCTOR)
+        {
+            return FrConductor(cosThetaI, etaI, etaT, k);
+        }
+        else
+        {
+            return (Spectrum) (1.f);
+        }
+    }
+};
+
+UberFresnel createFresnel(float etaA, float etaB)
+{
+    UberFresnel fresnel;
+    fresnel.etaA = etaA;
+    fresnel.etaB = etaB;
+    fresnel.type = FRESNEL_DIELECTRIC;
+    return fresnel;
+}
+
+UberFresnel createFresnel(Spectrum etaI, Spectrum etaT, Spectrum k)
+{
+    UberFresnel fresnel;
+    fresnel.etaI = etaI;
+    fresnel.etaT = etaT;
+    fresnel.k = k;
+    fresnel.type = FRESNEL_CONDUCTOR;
+    return fresnel;
+}
+
+UberFresnel createFresnel()
+{
+    UberFresnel fresnel;
+    fresnel.type = FRESNEL_NOOP;
+    return fresnel;
+}
+
 #endif

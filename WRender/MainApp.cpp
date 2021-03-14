@@ -202,6 +202,7 @@ private:
 	ComPtr<IDxcBlob> m_hitMatteLibrary;
 	ComPtr<IDxcBlob> m_hitMetalLibrary;
 	ComPtr<IDxcBlob> m_hitPlasticLibrary;
+	ComPtr<IDxcBlob> m_hitMirrorLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
@@ -327,8 +328,8 @@ bool MainApp::Initialize()
 		mClientWidth, mClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
 
 	// Setup scene with XML description file
-	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
-	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\EnvironmentMap.xml");
+	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
+	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\EnvironmentMap.xml");
 	BuildFrameResources();
 
 	// Execute the initialization commands.
@@ -942,6 +943,10 @@ void MainApp::CreateTopLevelAS(
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
 					static_cast<UINT>(2 * 9));
+			else if (Shader == "MirrorMaterial")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 10));
 			else
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
@@ -1109,6 +1114,7 @@ void MainApp::CreateRayTracingPipeline()
 	m_hitMatteLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MatteMaterial.hlsl");
 	m_hitMetalLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MetalMaterial.hlsl");
 	m_hitPlasticLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_PlasticMaterial.hlsl");
+	m_hitMirrorLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MirrorMaterial.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1130,6 +1136,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_hitMatteLibrary.Get(), { L"ClosestHit_MatteMaterial" });
 	pipeline.AddLibrary(m_hitMetalLibrary.Get(), { L"ClosestHit_MetalMaterial" });
 	pipeline.AddLibrary(m_hitPlasticLibrary.Get(), { L"ClosestHit_PlasticMaterial" });
+	pipeline.AddLibrary(m_hitMirrorLibrary.Get(), { L"ClosestHit_MirrorMaterial" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
@@ -1160,6 +1167,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddHitGroup(L"HitGroup_MatteMaterial", L"ClosestHit_MatteMaterial");
 	pipeline.AddHitGroup(L"HitGroup_MetalMaterial", L"ClosestHit_MetalMaterial");
 	pipeline.AddHitGroup(L"HitGroup_PlasticMaterial", L"ClosestHit_PlasticMaterial");
+	pipeline.AddHitGroup(L"HitGroup_MirrorMaterial", L"ClosestHit_MirrorMaterial");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
@@ -1180,6 +1188,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MatteMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MetalMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_PlasticMaterial" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MirrorMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
 	pipeline.AddRootSignatureAssociation(m_missShadowSignature.Get(), { L"Miss_Shadow" });
@@ -1571,6 +1580,24 @@ void MainApp::CreateShaderBindingTable() {
 			materialBufferPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_PlasticMaterial",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_MirrorMaterial",
 		{
 			objectBufferPointer,
 			materialBufferPointer,

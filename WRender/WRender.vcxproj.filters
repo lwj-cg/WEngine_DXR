@@ -297,5 +297,8 @@
     <FxCompile Include="Shaders\RayTracing\Hit_PlasticMaterial.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_MirrorMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>
