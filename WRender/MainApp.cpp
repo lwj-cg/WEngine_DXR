@@ -911,46 +911,34 @@ void MainApp::CreateTopLevelAS(
 			const auto& ritem = findRenderItem(mRenderItems, i);
 			const auto& material = mMaterials[ritem.materialName];
 			const auto& Shader = material.Shader;
-			if (Shader == "SpecularReflection")
+			if (Shader == "GlassMaterial")
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 1));
-			else if (Shader == "SpecularTransmission")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 1));
-			else if (Shader == "FresnelSpecular")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 4));
-			else if (Shader == "GlassMaterial")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 5));
+					static_cast<UINT>(2 * 0));
 			else if (Shader == "GlassSpecularMaterial")
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 6));
+					static_cast<UINT>(2 * 1));
 			else if (Shader == "MatteMaterial")
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 7));
+					static_cast<UINT>(2 * 2));
 			else if (Shader == "MetalMaterial")
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 8));
+					static_cast<UINT>(2 * 3));
 			else if (Shader == "PlasticMaterial")
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 9));
+					static_cast<UINT>(2 * 4));
 			else if (Shader == "MirrorMaterial")
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 10));
+					static_cast<UINT>(2 * 5));
 			else
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 3)); // LambertianReflection
+					static_cast<UINT>(2 * 2)); // MatteMaterial
 		}
 
 		// As for the bottom-level AS, the building the AS requires some scratch space
@@ -1103,12 +1091,7 @@ void MainApp::CreateRayTracingPipeline()
 	// used.
 	m_rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\RayGen.hlsl");
 	m_missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Miss.hlsl");
-	//m_hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit.hlsl");
-	//m_hitDiffuseLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\ClosestHit_Diffuse.hlsl");
 	m_hitShadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_Shadow.hlsl");
-	m_hitSpecularLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_SpecularBxDF.hlsl");
-	m_hitMicrofacetLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MicrofacetBxDF.hlsl");
-	m_hitLambertianLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_LambertianBxDF.hlsl");
 	m_hitGlassLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_GlassMaterial.hlsl");
 	m_hitGlassSpecularLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_GlassSpecularMaterial.hlsl");
 	m_hitMatteLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MatteMaterial.hlsl");
@@ -1124,13 +1107,6 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_rayGenLibrary.Get(), { L"RayGen" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss" });
 	pipeline.AddLibrary(m_missLibrary.Get(), { L"Miss_Shadow" });
-	//pipeline.AddLibrary(m_hitLibrary.Get(), { L"ClosestHit_Default" });
-	//pipeline.AddLibrary(m_hitDiffuseLibrary.Get(), { L"ClosestHit_Diffuse" });
-	pipeline.AddLibrary(m_hitMicrofacetLibrary.Get(), { L"ClosestHit_MicrofacetReflection" });
-	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_SpecularReflection" });
-	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_SpecularTransmission" });
-	pipeline.AddLibrary(m_hitSpecularLibrary.Get(), { L"ClosestHit_FresnelSpecular" });
-	pipeline.AddLibrary(m_hitLambertianLibrary.Get(), { L"ClosestHit_LambertianReflection" });
 	pipeline.AddLibrary(m_hitGlassLibrary.Get(), { L"ClosestHit_GlassMaterial" });
 	pipeline.AddLibrary(m_hitGlassSpecularLibrary.Get(), { L"ClosestHit_GlassSpecularMaterial" });
 	pipeline.AddLibrary(m_hitMatteLibrary.Get(), { L"ClosestHit_MatteMaterial" });
@@ -1155,13 +1131,6 @@ void MainApp::CreateRayTracingPipeline()
 	// discard some intersections. Finally, the closest-hit program is invoked on
 	// the intersection point closest to the ray origin. Those 3 shaders are bound
 	// together into a hit group.
-	//pipeline.AddHitGroup(L"HitGroup_Default", L"ClosestHit_Default");
-	//pipeline.AddHitGroup(L"HitGroup_Diffuse", L"ClosestHit_Diffuse");
-	pipeline.AddHitGroup(L"HitGroup_MicrofacetReflection", L"ClosestHit_MicrofacetReflection");
-	pipeline.AddHitGroup(L"HitGroup_SpecularReflection", L"ClosestHit_SpecularReflection");
-	pipeline.AddHitGroup(L"HitGroup_SpecularTransmission", L"ClosestHit_SpecularTransmission");
-	pipeline.AddHitGroup(L"HitGroup_LambertianReflection", L"ClosestHit_LambertianReflection");
-	pipeline.AddHitGroup(L"HitGroup_FresnelSpecular", L"ClosestHit_FresnelSpecular");
 	pipeline.AddHitGroup(L"HitGroup_GlassMaterial", L"ClosestHit_GlassMaterial");
 	pipeline.AddHitGroup(L"HitGroup_GlassSpecularMaterial", L"ClosestHit_GlassSpecularMaterial");
 	pipeline.AddHitGroup(L"HitGroup_MatteMaterial", L"ClosestHit_MatteMaterial");
@@ -1176,13 +1145,6 @@ void MainApp::CreateRayTracingPipeline()
 	// to as hit groups, meaning that the underlying intersection, any-hit and
 	// closest-hit shaders share the same root signature.
 	pipeline.AddRootSignatureAssociation(m_rayGenSignature.Get(), { L"RayGen" });
-	//pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_Default" });
-	//pipeline.AddRootSignatureAssociation(m_hitDiffuseSignature.Get(), { L"HitGroup_Diffuse" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MicrofacetReflection" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_SpecularReflection" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_SpecularTransmission" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_LambertianReflection" });
-	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_FresnelSpecular" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_GlassMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_GlassSpecularMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MatteMaterial" });
@@ -1416,97 +1378,7 @@ void MainApp::CreateShaderBindingTable() {
 	m_sbtHelper.AddMissProgram(L"Miss", { heapPointer });
 	m_sbtHelper.AddMissProgram(L"Miss_Shadow", {});
 
-	// Adding the triangle hit shader
-	m_sbtHelper.AddHitGroup(L"HitGroup_MicrofacetReflection",
-		{
-			objectBufferPointer,
-			materialBufferPointer,
-			VertexBufferPointer,
-			NormalBufferPointer,
-			TexCoordBufferPointer,
-			IndexBufferPointer,
-			NormalIndexBufferPointer,
-			TexCoordIndexBufferPointer,
-			lightBufferPointer,
-			heapPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
-		{
-			objectBufferPointer,
-			materialBufferPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_SpecularReflection",
-		{
-			objectBufferPointer,
-			materialBufferPointer,
-			VertexBufferPointer,
-			NormalBufferPointer,
-			TexCoordBufferPointer,
-			IndexBufferPointer,
-			NormalIndexBufferPointer,
-			TexCoordIndexBufferPointer,
-			lightBufferPointer,
-			heapPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
-		{
-			objectBufferPointer,
-			materialBufferPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_SpecularTransmission",
-		{
-			objectBufferPointer,
-			materialBufferPointer,
-			VertexBufferPointer,
-			NormalBufferPointer,
-			TexCoordBufferPointer,
-			IndexBufferPointer,
-			NormalIndexBufferPointer,
-			TexCoordIndexBufferPointer,
-			lightBufferPointer,
-			heapPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
-		{
-			objectBufferPointer,
-			materialBufferPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_LambertianReflection",
-		{
-			objectBufferPointer,
-			materialBufferPointer,
-			VertexBufferPointer,
-			NormalBufferPointer,
-			TexCoordBufferPointer,
-			IndexBufferPointer,
-			NormalIndexBufferPointer,
-			TexCoordIndexBufferPointer,
-			lightBufferPointer,
-			heapPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
-		{
-			objectBufferPointer,
-			materialBufferPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_FresnelSpecular",
-		{
-			objectBufferPointer,
-			materialBufferPointer,
-			VertexBufferPointer,
-			NormalBufferPointer,
-			TexCoordBufferPointer,
-			IndexBufferPointer,
-			NormalIndexBufferPointer,
-			TexCoordIndexBufferPointer,
-			lightBufferPointer,
-			heapPointer
-		});
-	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
-		{
-			objectBufferPointer,
-			materialBufferPointer
-		});
+	// Adding hit groups
 	m_sbtHelper.AddHitGroup(L"HitGroup_GlassMaterial",
 		{
 			objectBufferPointer,

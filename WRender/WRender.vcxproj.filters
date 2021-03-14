@@ -270,15 +270,6 @@
     <FxCompile Include="Shaders\RayTracing\Hit_GlassMaterial.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\Hit_LambertianBxDF.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\Hit_MicrofacetBxDF.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\Hit_SpecularBxDF.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Hit_GlassSpecularMaterial.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
