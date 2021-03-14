@@ -7,6 +7,7 @@
 #include "PBR.hlsl"
 #include "Light.hlsl"
 #include "Intersection.hlsl"
+#include "fresnel.hlsl"
 
 inline float RoughnessToAlpha(float roughness)
 {

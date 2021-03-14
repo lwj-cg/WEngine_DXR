@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FRESNEL_SPECULAR_H_
+#define FRESNEL_SPECULAR_H_
 
 #include "../fresnel.hlsl"
 #include "../Helpers.hlsl"
@@ -70,3 +71,5 @@ FresnelSpecular createFresnelSpecular(float3 R, float3 T, float etaA, float etaB
     frSpec.etaB = etaB;
     return frSpec;
 }
+
+#endif

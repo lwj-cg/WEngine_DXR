@@ -119,7 +119,13 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::ColorEdit4("TransColor##value", &m.TransColor.x))
 		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("F0##value", &m.F0.x, 0.01f, 0, 1))
+	if (ImGui::DragFloat3("F0##value", &m.F0.x, 0.01f, 0, 8))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat3("k##value", &m.k.x, 0.01f, 0, 8))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat3("kd##value", &m.kd.x, 0.01f, 0, 8))
+		m.NumFramesDirty = gNumFrameResources;
+	if (ImGui::DragFloat3("ks##value", &m.ks.x, 0.01f, 0, 8))
 		m.NumFramesDirty = gNumFrameResources;
 	if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
 		m.NumFramesDirty = gNumFrameResources;
@@ -341,6 +347,7 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 
 	ImGui::Text("Scene: CornellBox");
 	ImGui::Text("Number of faces: %d", numFaces);
+	ImGui::Text("Num static frames: %d", passData.NumStaticFrame);
 	if(ImGui::SliderInt("Sqrt Samples##value", (int*)&passData.SqrtSamples, 1, 8))
 		passData.NumFramesDirty = gNumFrameResources;
 	if(ImGui::SliderInt("Max Depth##value", (int*)&passData.MaxDepth, 0, 25))

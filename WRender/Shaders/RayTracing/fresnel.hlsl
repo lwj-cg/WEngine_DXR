@@ -1,5 +1,6 @@
 #ifndef FRESNEL_H_
 #define FRESNEL_H_
+#include "Common.hlsl"
 
 inline float sqr(float x)
 {
@@ -17,6 +18,33 @@ inline float SchlickWeight(float cosTheta)
 {
     float m = clamp(1 - cosTheta, 0, 1);
     return (m * m) * (m * m) * m;
+}
+
+// https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
+Spectrum FrConductor(float cosThetaI, const Spectrum etai,
+                     const Spectrum etat, const Spectrum k)
+{
+    cosThetaI = clamp(cosThetaI, -1, 1);
+    Spectrum eta = etat / etai;
+    Spectrum etak = k / etai;
+
+    float cosThetaI2 = cosThetaI * cosThetaI;
+    float sinThetaI2 = 1. - cosThetaI2;
+    Spectrum eta2 = eta * eta;
+    Spectrum etak2 = etak * etak;
+
+    Spectrum t0 = eta2 - etak2 - sinThetaI2;
+    Spectrum a2plusb2 = sqrt(t0 * t0 + 4 * eta2 * etak2);
+    Spectrum t1 = a2plusb2 + cosThetaI2;
+    Spectrum a = sqrt(0.5f * (a2plusb2 + t0));
+    Spectrum t2 = (float) 2 * cosThetaI * a;
+    Spectrum Rs = (t1 - t2) / (t1 + t2);
+
+    Spectrum t3 = cosThetaI2 * a2plusb2 + sinThetaI2 * sinThetaI2;
+    Spectrum t4 = t2 * sinThetaI2;
+    Spectrum Rp = Rs * (t3 - t4) / (t3 + t4);
+
+    return 0.5 * (Rp + Rs);
 }
 
 inline float FrSchlick(float R0, float cosTheta)
@@ -107,6 +135,26 @@ SchlickFresnel createSchlickFresnel(float3 R0)
 {
     SchlickFresnel fr;
     fr.R0 = R0;
+    return fr;
+}
+
+struct FresnelConductor
+{
+    Spectrum etaI;
+    Spectrum etaT;
+    Spectrum k;
+    Spectrum Evaluate(float cosThetaI)
+    {
+        return FrConductor(abs(cosThetaI), etaI, etaT, k);
+    }
+};
+
+FresnelConductor createFresnelConductor(Spectrum etaI, Spectrum etaT, Spectrum k)
+{
+    FresnelConductor fr;
+    fr.etaI = etaI;
+    fr.etaT = etaT;
+    fr.k = k;
     return fr;
 }
 

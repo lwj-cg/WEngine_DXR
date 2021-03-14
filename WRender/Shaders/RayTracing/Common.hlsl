@@ -1,7 +1,6 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
-#include "fresnel.hlsl"
 #include "BxDF/BSDFCommon.hlsl"
 
 #define M_E        2.71828182845904523536   // e
@@ -17,6 +16,8 @@
 #define M_2_SQRTPI 1.12837916709551257390   // 2/sqrt(pi)
 #define M_SQRT2    1.41421356237309504880   // sqrt(2)
 #define M_SQRT1_2  0.707106781186547524401  // 1/sqrt(2)
+
+typedef float3 Spectrum;
 
 // Hit information, aka ray payload
 // This sample only carries a shading color and hit distance.
@@ -65,6 +66,9 @@ struct MaterialData
     float4 TransColor;
     float3 Emission;
     float3 F0;
+    float3 k;
+    float3 kd;
+    float3 ks;
     float Transparent;
     float Smoothness;
     float Metallic;
@@ -141,8 +145,6 @@ Interaction createInteraction(float3 p, float3 wo, float3 n, float3 ng)
     it.ng = ng;
     return it;
 }
-
-typedef float3 Spectrum;
 
 inline float AbsDot(float3 v1, float3 v2)
 {

@@ -1,4 +1,3 @@
-
 #include "HitCommon.hlsl"
 #include "BxDF/BSDFCommon.hlsl"
 #include "BxDF/FresnelSpecular.hlsl"
@@ -10,12 +9,10 @@
 #include "Random.hlsl"
 #include "fresnel.hlsl"
 
-
-struct GlassMaterial
+struct MetalMaterial
 {
-    MicrofacetReflection microRefl;
-    MicrofacetTransmission microTrans;
-        
+    MetalMicrofacetReflection microRefl;
+    
     Spectrum f(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb, float3 ng)
     {
         float3 wo = WorldToLocal(woWorld, onb), wi = WorldToLocal(wiWorld, onb);
@@ -28,16 +25,11 @@ struct GlassMaterial
         {
             f = microRefl.f(wo, wi);
         }
-        else
-        {
-            f = microTrans.f(wo, wi);
-        }
         return f;
     }
     
     float Pdf(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb)
     {
-        int matchingComps = 0;
         float3 wo = WorldToLocal(woWorld, onb), wi = WorldToLocal(wiWorld, onb);
         if (wo.z == 0)
             return 0.;
@@ -45,23 +37,12 @@ struct GlassMaterial
         if (MatchesFlags(microRefl.type, flags))
         {
             pdf += microRefl.Pdf(wo, wi);
-            ++matchingComps;
         }
-        if (MatchesFlags(microTrans.type, flags))
-        {
-            pdf += microTrans.Pdf(wo, wi);
-            ++matchingComps;
-        }
-        pdf /= matchingComps;
         return pdf;
     }
     
     Spectrum Sample_f(float3 woWorld, out float3 wiWorld, float2 u, out float pdf, BxDFType type, inout BxDFType sampledType, Onb onb)
     {
-        int matchingComps = 2;
-        int comp = min(floor(u[0] * matchingComps), matchingComps - 1);
-        // Remap _BxDF_ sample _u_ to $[0,1)^2$
-        float2 uRemapped = float2(min(u[0] * matchingComps - comp, 0.999999), u[1]);
         
         // Sample chosen _BxDF_
         float3 wi, wo = WorldToLocal(woWorld, onb);
@@ -69,40 +50,30 @@ struct GlassMaterial
             return (Spectrum) 0.;
         pdf = 0;
         float3 f;
-        if (comp == 0)
-        {
-            f = microRefl.Sample_f(wo, wi, uRemapped, pdf, sampledType);
-            sampledType = microRefl.type;
-        }
-        else
-        {
-            f = microTrans.Sample_f(wo, wi, uRemapped, pdf, sampledType);
-            sampledType = microTrans.type;
-        }
+        f = microRefl.Sample_f(wo, wi, u, pdf, sampledType);
+        sampledType = microRefl.type;
         wiWorld = LocalToWorld(wi, onb);
-        pdf /= matchingComps;
         return f;
     }
 };
 
-GlassMaterial createGlassMaterial(float3 R, float3 T, float urough, float vrough, float eta)
+MetalMaterial createMetalMaterial(Spectrum eta, Spectrum k, float urough, float vrough)
 {
-    GlassMaterial mat;
+    MetalMaterial mat;
+    
     urough = RoughnessToAlpha(urough);
     vrough = RoughnessToAlpha(vrough);
         
     TrowbridgeReitzDistribution distrib = createTrowbridgeReitzDistribution(urough, vrough);
     //BeckmannDistribution distrib = createBeckmannDistribution(urough, vrough);
-    FresnelDielectric fresnel = createFresnelDielectric(1, eta);
+    FresnelConductor fresnel = createFresnelConductor((Spectrum)1.f, eta, k);
         
-    mat.microRefl = createMicrofacetReflection(R, distrib, fresnel);
-    
-    mat.microTrans = createMicrofacetTransmission(T, 1.f, eta, distrib, fresnel);
-    
+    mat.microRefl = createMetalMicrofacetReflection((Spectrum)1.f, distrib, fresnel);
+        
     return mat;
 }
 
-Spectrum EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
+Spectrum EstimateDirect(Interaction it, MetalMaterial mat, float2 uScattering,
                       AreaLight light, float2 uLight,
                       bool specular, Onb onb, float scene_epsilon)
 {
@@ -112,7 +83,7 @@ Spectrum EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
     float3 wi;
     float lightPdf = 0, scatteringPdf = 0;
     float Ldist;
-    float3 Li = light.Sample_Li(it, uLight, wi, lightPdf, Ldist);
+    Spectrum Li = light.Sample_Li(it, uLight, wi, lightPdf, Ldist);
     if (lightPdf > 0 && !isBlack(Li))
     {
         // Compute BSDF or phase function's value for light sample
@@ -169,8 +140,9 @@ Spectrum EstimateDirect(Interaction it, GlassMaterial mat, float2 uScattering,
     return Ld;
 }
 
+
 [shader("closesthit")]
-void ClosestHit_GlassMaterial(inout RayPayload current_payload, Attributes attrib)
+void ClosestHit_MetalMaterial(inout RayPayload current_payload, Attributes attrib)
 {
     
     // Fetch UV
@@ -237,19 +209,18 @@ void ClosestHit_GlassMaterial(inout RayPayload current_payload, Attributes attri
     // Fecth data needed by BxDF from MaterialData
     int diffuseMapIdx = matData.DiffuseMapIdx;
     float3 baseColor = diffuseMapIdx >= 0 ? gTextureMaps[diffuseMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb : matData.Albedo.rgb;
-    float3 transColor = matData.TransColor.rgb;
-    float3 F0 = matData.F0;
+    Spectrum F0 = matData.F0;
+    Spectrum k = matData.k;
     float eta = matData.RefraciveIndex;
     float3 emission = matData.Emission;
     float roughness = (1 - matData.Smoothness);
     
     // Construct Material of Interact Surface
-    GlassMaterial mat = createGlassMaterial(
-        baseColor,
-        transColor,
+    MetalMaterial mat = createMetalMaterial(
+        F0,
+        k,
         roughness,
-        roughness,
-        eta
+        roughness
     );
     
     // Construct SurfaceInteration

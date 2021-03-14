@@ -25,6 +25,7 @@ struct WObjectConstants
 	{
 		auto InvMatrix = DirectX::XMMatrixInverse(&XMMatrixDeterminant(_Transform), _Transform);
 		auto InvTranposeMatrix = DirectX::XMMatrixTranspose(InvMatrix);
+		//auto InvTranposeMatrix = InvMatrix;
 		DirectX::XMStoreFloat4x4(&InvTranspose, InvTranposeMatrix);
 		DirectX::XMStoreFloat4x4(&ObjectToWorld, _Transform);
 	};
@@ -93,6 +94,9 @@ struct WMaterialData
 	DirectX::XMFLOAT4 TransColor = { .0f, .0f, .0f, 1.0f };
 	DirectX::XMFLOAT3 Emission = { 0.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT3 F0 = { 0.5f, 0.5f, 0.5f };
+	DirectX::XMFLOAT3 k = { 0.f,0.f,0.f };
+	DirectX::XMFLOAT3 kd = { 0.f,0.f,0.f };
+	DirectX::XMFLOAT3 ks = { 0.f,0.f,0.f };
 	float Transparent = 0.0f;
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;
@@ -128,6 +132,9 @@ struct WMaterial
 	DirectX::XMFLOAT4 TransColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	DirectX::XMFLOAT3 Emission = { 0.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT3 F0 = { 0.5f, 0.5f, 0.5f };
+	DirectX::XMFLOAT3 k = { 0.f,0.f,0.f };
+	DirectX::XMFLOAT3 kd = { 0.f,0.f,0.f };
+	DirectX::XMFLOAT3 ks = { 0.f,0.f,0.f };
 	float Transparent = 0.0f;
 	float Smoothness = 0.5f;
 	float Metallic = 0.0f;

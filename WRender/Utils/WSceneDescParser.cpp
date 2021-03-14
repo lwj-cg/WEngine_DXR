@@ -76,6 +76,24 @@ void WSceneDescParser::Parse(const char* xmlDoc)
 							DirectX::XMFLOAT3 F0Val = parseFloat3(F0Elem->GetText());
 							tmpMatData.F0 = F0Val;
 						}
+						tinyxml2::XMLElement* kElem = materialNode->FirstChildElement("k");
+						if (kElem)
+						{
+							DirectX::XMFLOAT3 kVal = parseFloat3(kElem->GetText());
+							tmpMatData.k = kVal;
+						}
+						tinyxml2::XMLElement* kdElem = materialNode->FirstChildElement("kd");
+						if (kdElem)
+						{
+							DirectX::XMFLOAT3 kdVal = parseFloat3(kdElem->GetText());
+							tmpMatData.kd = kdVal;
+						}
+						tinyxml2::XMLElement* ksElem = materialNode->FirstChildElement("ks");
+						if (ksElem)
+						{
+							DirectX::XMFLOAT3 ksVal = parseFloat3(ksElem->GetText());
+							tmpMatData.ks = ksVal;
+						}
 						tinyxml2::XMLElement* emissionElem = materialNode->FirstChildElement("emission");
 						if (emissionElem)
 						{
@@ -527,14 +545,19 @@ void autoGenerateVertexNormals(const std::vector<tinyobj::real_t>& vertices, con
 		auto& fVector1 = DirectX::XMVectorSubtract(fVertex1, fVertex0);
 		auto& fVector2 = DirectX::XMVectorSubtract(fVertex2, fVertex0);
 		auto& fNormal = DirectX::XMVector3Normalize(DirectX::XMVector3Cross(fVector1, fVector2));
-		DirectX::XMFLOAT3 normal;
-		DirectX::XMStoreFloat3(&normal, fNormal);
-		normals[3 * index0] += normal.x; normals[3 * index0 + 1] += normal.y; normals[3 * index0 + 2] += normal.z;
-		normals[3 * index1] += normal.x; normals[3 * index1 + 1] += normal.y; normals[3 * index1 + 2] += normal.z;
-		normals[3 * index2] += normal.x; normals[3 * index2 + 1] += normal.y; normals[3 * index2 + 2] += normal.z;
-	}
-	for (size_t i = 0; i < normals.size(); i++)
-	{
-		normals[i] /= 3.f;
+
+		// Update normals
+		DirectX::XMFLOAT3 orginNormal0(normals[3 * index0], normals[3 * index0 + 1], normals[3 * index0 + 2]);
+		DirectX::XMFLOAT3 orginNormal1(normals[3 * index1], normals[3 * index1 + 1], normals[3 * index1 + 2]);
+		DirectX::XMFLOAT3 orginNormal2(normals[3 * index2], normals[3 * index2 + 1], normals[3 * index2 + 2]);
+		DirectX::FXMVECTOR& fOriginNormal0 = DirectX::XMLoadFloat3(&orginNormal0);
+		DirectX::FXMVECTOR& fOriginNormal1 = DirectX::XMLoadFloat3(&orginNormal1);
+		DirectX::FXMVECTOR& fOriginNormal2 = DirectX::XMLoadFloat3(&orginNormal2);
+		auto& fNormal0 = DirectX::XMVector3Normalize(DirectX::XMVectorAdd(fOriginNormal0, fNormal));
+		auto& fNormal1 = DirectX::XMVector3Normalize(DirectX::XMVectorAdd(fOriginNormal1, fNormal));
+		auto& fNormal2 = DirectX::XMVector3Normalize(DirectX::XMVectorAdd(fOriginNormal2, fNormal));
+		normals[3 * index0] = DirectX::XMVectorGetX(fNormal0); normals[3 * index0 + 1] = DirectX::XMVectorGetY(fNormal0); normals[3 * index0 + 2] = DirectX::XMVectorGetZ(fNormal0);
+		normals[3 * index1] = DirectX::XMVectorGetX(fNormal1); normals[3 * index1 + 1] = DirectX::XMVectorGetY(fNormal1); normals[3 * index1 + 2] = DirectX::XMVectorGetZ(fNormal1);
+		normals[3 * index2] = DirectX::XMVectorGetX(fNormal2); normals[3 * index2 + 1] = DirectX::XMVectorGetY(fNormal2); normals[3 * index2 + 2] = DirectX::XMVectorGetZ(fNormal2);
 	}
 }

@@ -291,5 +291,11 @@
     <FxCompile Include="Shaders\RayTracing\BxDF\OrenNayar.hlsl">
       <Filter>Shaders\BxDF</Filter>
     </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_MetalMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_PlasticMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

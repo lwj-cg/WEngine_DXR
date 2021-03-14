@@ -7,6 +7,7 @@
 #include "PBR.hlsl"
 #include "Light.hlsl"
 #include "Intersection.hlsl"
+#include "fresnel.hlsl"
 
 float3 SpecularReflection_f(float3 wo, float3 wi)
 {
@@ -44,7 +45,7 @@ float3 SpecularTransmission_Samplef(float3 wo /* from isect */, out float3 wi, c
     float etaT = entering ? etaB : etaA;
     
     // Compute ray direction for specular transmission
-    if (!refract(-wo, faceforward(float3(0, 0, 1), wo), etaI / etaT, wi))
+    if (!refract(wo, faceforward(float3(0, 0, 1), wo), etaI / etaT, wi))
         return 0;
     pdf = 1;
     float3 ft = T * ((float3) 1.f - FresnelTerm(F0, CosTheta(wi)));
@@ -142,8 +143,7 @@ void ClosestHit_SpecularReflection(inout RayPayload current_payload, Attributes 
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = faceforward(world_shading_normal, -ray_direction);
-        ffnormal = world_shading_normal;
+        ffnormal = normalize(world_shading_normal);
     }
     else
     {
@@ -152,8 +152,7 @@ void ClosestHit_SpecularReflection(inout RayPayload current_payload, Attributes 
         float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
         float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = faceforward(world_shading_normal, -ray_direction);
-        ffnormal = world_shading_normal;
+        ffnormal = normalize(world_shading_normal);
     }
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
@@ -236,7 +235,9 @@ void ClosestHit_SpecularTransmission(inout RayPayload current_payload, Attribute
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = faceforward(world_shading_normal, -ray_direction);
+        //ffnormal = faceforward(world_shading_normal, -ray_direction);
+        ffnormal = normalize(world_shading_normal);
+
     }
     else
     {
@@ -245,7 +246,8 @@ void ClosestHit_SpecularTransmission(inout RayPayload current_payload, Attribute
         float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
         float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = faceforward(world_shading_normal, -ray_direction);
+        //ffnormal = faceforward(world_shading_normal, -ray_direction);
+        ffnormal = normalize(world_shading_normal);
     }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
@@ -332,7 +334,7 @@ void ClosestHit_FresnelSpecular(inout RayPayload current_payload, Attributes att
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = faceforward(world_shading_normal, -ray_direction);
+        ffnormal = normalize(world_shading_normal);
     }
     else
     {
@@ -341,7 +343,7 @@ void ClosestHit_FresnelSpecular(inout RayPayload current_payload, Attributes att
         float3 normal2 = gNormalBuffer[normalOffset + gNormalIndexBuffer[vertId + 2]].normal;
         float3 shading_normal = barycentrics.x * normal0 + barycentrics.y * normal1 + barycentrics.z * normal2;
         float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
-        ffnormal = faceforward(world_shading_normal, -ray_direction);
+        ffnormal = normalize(world_shading_normal);
     }
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     

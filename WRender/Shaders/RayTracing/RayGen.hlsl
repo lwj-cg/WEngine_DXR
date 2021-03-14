@@ -93,7 +93,11 @@ void RayGen()
             
             // Terminate path if ray escaped or _maxDepth_ was reached
             if (payload.done || bounces >= max_depth)
+            {
+                // Add emitted light at path vertex or from the environment
+                L += beta * payload.emission;
                 break;
+            }
 
             float3 Ld = beta * payload.radiance;
             L += Ld;

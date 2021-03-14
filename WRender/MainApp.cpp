@@ -135,6 +135,7 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<WTexture>> mTextures;
 	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
 	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
+	std::unique_ptr<WTexture> mEnvironmentMap;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
@@ -199,6 +200,8 @@ private:
 	ComPtr<IDxcBlob> m_hitGlassLibrary;
 	ComPtr<IDxcBlob> m_hitGlassSpecularLibrary;
 	ComPtr<IDxcBlob> m_hitMatteLibrary;
+	ComPtr<IDxcBlob> m_hitMetalLibrary;
+	ComPtr<IDxcBlob> m_hitPlasticLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
@@ -324,7 +327,8 @@ bool MainApp::Initialize()
 		mClientWidth, mClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
 
 	// Setup scene with XML description file
-	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
+	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
+	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\EnvironmentMap.xml");
 	BuildFrameResources();
 
 	// Execute the initialization commands.
@@ -667,6 +671,9 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 			);
 			materialData.TransColor = m.TransColor;
 			materialData.F0 = m.F0;
+			materialData.k = m.k;
+			materialData.kd = m.kd;
+			materialData.ks = m.ks;
 			materialData.RefractiveIndex = m.RefractiveIndex;
 			materialData.Sigma = m.Sigma;
 
@@ -708,6 +715,7 @@ void MainApp::UpdateMainPassCB(const GameTimer& gt)
 		--mPassItem.NumFramesDirty;
 	}
 	mPassCB.NumStaticFrame = mNumStaticFrame;
+	mPassItem.NumStaticFrame = mPassCB.NumStaticFrame;
 
 	auto currPassCB = mCurrFrameResource->PassCB.get();
 	currPassCB->CopyData(0, mPassCB);
@@ -926,6 +934,14 @@ void MainApp::CreateTopLevelAS(
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
 					static_cast<UINT>(2 * 7));
+			else if (Shader == "MetalMaterial")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 8));
+			else if (Shader == "PlasticMaterial")
+				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
+					instances[i].second, static_cast<UINT>(i),
+					static_cast<UINT>(2 * 9));
 			else
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
@@ -1052,7 +1068,16 @@ ComPtr<ID3D12RootSignature> MainApp::CreateEmptySignature()
 //
 ComPtr<ID3D12RootSignature> MainApp::CreateMissSignature() {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
-	return rsc.Generate(md3dDevice.Get(), true);
+	rsc.AddHeapRangesParameter(
+		{
+			{
+				1 /*t1*/, 1, 0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV /* Environment Map */,
+				2+mTextures.size()
+			}
+		});
+	auto staticSamplers = GetStaticSamplers();
+	return rsc.Generate(md3dDevice.Get(), true, (UINT)staticSamplers.size(), staticSamplers.data());
 }
 
 //-----------------------------------------------------------------------------
@@ -1082,6 +1107,8 @@ void MainApp::CreateRayTracingPipeline()
 	m_hitGlassLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_GlassMaterial.hlsl");
 	m_hitGlassSpecularLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_GlassSpecularMaterial.hlsl");
 	m_hitMatteLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MatteMaterial.hlsl");
+	m_hitMetalLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MetalMaterial.hlsl");
+	m_hitPlasticLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_PlasticMaterial.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1101,6 +1128,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_hitGlassLibrary.Get(), { L"ClosestHit_GlassMaterial" });
 	pipeline.AddLibrary(m_hitGlassSpecularLibrary.Get(), { L"ClosestHit_GlassSpecularMaterial" });
 	pipeline.AddLibrary(m_hitMatteLibrary.Get(), { L"ClosestHit_MatteMaterial" });
+	pipeline.AddLibrary(m_hitMetalLibrary.Get(), { L"ClosestHit_MetalMaterial" });
+	pipeline.AddLibrary(m_hitPlasticLibrary.Get(), { L"ClosestHit_PlasticMaterial" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
@@ -1129,6 +1158,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddHitGroup(L"HitGroup_GlassMaterial", L"ClosestHit_GlassMaterial");
 	pipeline.AddHitGroup(L"HitGroup_GlassSpecularMaterial", L"ClosestHit_GlassSpecularMaterial");
 	pipeline.AddHitGroup(L"HitGroup_MatteMaterial", L"ClosestHit_MatteMaterial");
+	pipeline.AddHitGroup(L"HitGroup_MetalMaterial", L"ClosestHit_MetalMaterial");
+	pipeline.AddHitGroup(L"HitGroup_PlasticMaterial", L"ClosestHit_PlasticMaterial");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
@@ -1147,6 +1178,8 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_GlassMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_GlassSpecularMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MatteMaterial" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MetalMaterial" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_PlasticMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
 	pipeline.AddRootSignatureAssociation(m_missShadowSignature.Get(), { L"Miss_Shadow" });
@@ -1212,10 +1245,12 @@ void MainApp::CreateRaytracingOutputBuffer() {
 // raytracing output and the top-level acceleration structure
 //
 void MainApp::CreateShaderResourceHeap() {
-	// Create a SRV/UAV/CBV descriptor heap. We need 2 entries - 1 UAV for the
+	// Create a SRV/UAV/CBV descriptor heap. We need 2 + m + 1 entries - 1 UAV for the
 	// raytracing output and 1 SRV for the TLAS
+	// m SRV for all the albeldo, normal etc. texture maps
+	// 1 SRV for the environment map
 	m_srvUavHeap = nv_helpers_dx12::CreateDescriptorHeap(
-		md3dDevice.Get(), 2 + mTextures.size(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+		md3dDevice.Get(), 2 + mTextures.size() + 1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	// Get a handle to the heap memory on the CPU side, to be able to write the
 	// descriptors directly
@@ -1265,6 +1300,16 @@ void MainApp::CreateShaderResourceHeap() {
 		md3dDevice->CreateShaderResourceView(tex.Get(), &tSrvDesc, srvHandle);
 		//if (texItem->TextureIdx < orderedTextureItems.size() - 1)
 	}
+
+	// next descriptor
+	srvHandle.ptr += mCbvSrvDescriptorSize;
+	auto tex = mEnvironmentMap->Resource;
+	tSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+	tSrvDesc.TextureCube.MostDetailedMip = 0;
+	tSrvDesc.TextureCube.MipLevels = tex->GetDesc().MipLevels;
+	tSrvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+	tSrvDesc.Format = tex->GetDesc().Format;
+	md3dDevice->CreateShaderResourceView(tex.Get(), &tSrvDesc, srvHandle);
 }
 
 void MainApp::CreateTextureShaderResourceHeap()
@@ -1359,7 +1404,7 @@ void MainApp::CreateShaderBindingTable() {
 
 	// The miss and hit shaders do not access any external resources: instead they
 	// communicate their results through the ray payload
-	m_sbtHelper.AddMissProgram(L"Miss", {});
+	m_sbtHelper.AddMissProgram(L"Miss", { heapPointer });
 	m_sbtHelper.AddMissProgram(L"Miss_Shadow", {});
 
 	// Adding the triangle hit shader
@@ -1490,6 +1535,42 @@ void MainApp::CreateShaderBindingTable() {
 			materialBufferPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_MatteMaterial",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_MetalMaterial",
+		{
+			objectBufferPointer,
+			materialBufferPointer,
+			VertexBufferPointer,
+			NormalBufferPointer,
+			TexCoordBufferPointer,
+			IndexBufferPointer,
+			NormalIndexBufferPointer,
+			TexCoordIndexBufferPointer,
+			lightBufferPointer,
+			heapPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+		{
+			objectBufferPointer,
+			materialBufferPointer
+		});
+	m_sbtHelper.AddHitGroup(L"HitGroup_PlasticMaterial",
 		{
 			objectBufferPointer,
 			materialBufferPointer,
@@ -1668,4 +1749,13 @@ void MainApp::LoadTextures(const std::map<std::string, WTextureRecord>& textureI
 			texMap->Resource, texMap->UploadHeap));
 		mTextures[texMap->Name] = std::move(texMap);
 	}
+
+	// Add Environment Map
+	std::wstring environmentMapFilename = L"../Textures/grasscube1024.dds";
+	mEnvironmentMap = std::make_unique<WTexture>();
+	mEnvironmentMap->Name = "EnvironmentMap";
+	mEnvironmentMap->Filename = environmentMapFilename;
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), mEnvironmentMap->Filename.c_str(),
+		mEnvironmentMap->Resource, mEnvironmentMap->UploadHeap));
 }
