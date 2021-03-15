@@ -11,7 +11,7 @@
 
 struct MetalMaterial
 {
-    MetalMicrofacetReflection microRefl;
+    MicrofacetReflection microRefl;
     
     Spectrum f(float3 woWorld, float3 wiWorld, BxDFType flags, Onb onb, float3 ng)
     {
@@ -66,9 +66,9 @@ MetalMaterial createMetalMaterial(Spectrum eta, Spectrum k, float urough, float 
         
     TrowbridgeReitzDistribution distrib = createTrowbridgeReitzDistribution(urough, vrough);
     //BeckmannDistribution distrib = createBeckmannDistribution(urough, vrough);
-    FresnelConductor fresnel = createFresnelConductor((Spectrum)1.f, eta, k);
+    UberFresnel fresnel = createFresnel((Spectrum)1.f, eta, k);
         
-    mat.microRefl = createMetalMicrofacetReflection((Spectrum)1.f, distrib, fresnel);
+    mat.microRefl = createMicrofacetReflection((Spectrum)1.f, distrib, fresnel);
         
     return mat;
 }

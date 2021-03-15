@@ -71,6 +71,25 @@ bool refract(float3 i /* from isect */, float3 n, float eta, out float3 t)
     return true;
 }
 
+// reflect wo with n
+float3 Reflect(float3 wo, float3 n)
+{
+    return -wo + 2 * dot(wo, n) * n;
+}
+
+// refract i with n
+bool Refract(float3 i /* from isect */, float3 n, float eta, out float3 t)
+{
+    // eta is n1 / n2
+    float cosi = dot(i, n);
+    float cost2 = 1.0f - eta * eta * (1.0f - cosi * cosi);
+    if (cost2 <= 0)
+        return false;
+    t = eta * -i + ((eta * cosi - sqrt(abs(cost2))) * n);
+    t = t * (float3) (cost2 > 0);
+    return true;
+}
+
 inline bool isBlack(float3 L)
 {
     return all(L <= (float3) 0.0f);

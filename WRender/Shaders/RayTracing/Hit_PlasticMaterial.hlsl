@@ -87,7 +87,7 @@ PlasticMaterial createPlasticMaterial(Spectrum kd, Spectrum ks, float rough)
     
     rough = RoughnessToAlpha(rough);
     TrowbridgeReitzDistribution distrib = createTrowbridgeReitzDistribution(rough, rough);
-    FresnelDielectric fresnel = createFresnelDielectric(1.5, 1);
+    UberFresnel fresnel = createFresnel(1.5, 1);
     
     mat.microRefl = createMicrofacetReflection(ks, distrib, fresnel);
     

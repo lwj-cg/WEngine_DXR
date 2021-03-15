@@ -82,13 +82,15 @@ struct MicrofacetTransmission
 };
 
 MicrofacetTransmission createMicrofacetTransmission(Spectrum T, float etaA, float etaB, 
-    TrowbridgeReitzDistribution distribution, FresnelDielectric fresnel, BxDFType type = BSDF_TRANSMISSION | BSDF_GLOSSY)
+    TrowbridgeReitzDistribution distribution, BxDFType type = BSDF_TRANSMISSION | BSDF_GLOSSY)
 {
     MicrofacetTransmission microTrans;
     microTrans.type = type;
     microTrans.T = T;
     microTrans.etaA = etaA;
     microTrans.etaB = etaB;
+    FresnelDielectric fresnel = createFresnelDielectric(etaA, etaB);
+    microTrans.fresnel = fresnel;
     microTrans.distribution = distribution;
     microTrans.fresnel = fresnel;
     return microTrans;

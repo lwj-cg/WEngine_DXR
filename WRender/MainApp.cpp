@@ -40,6 +40,18 @@ struct AccelerationStructureBuffers
 };
 
 const int gNumFrameResources = 3;
+static const UINT gNumRayTypes = 2;
+
+static std::map<std::string, UINT> ShaderToHitGroupTable = {
+	{"GlassMaterial", 0},
+	{"GlassSpecularMaterial", 1},
+	{"MatteMaterial",2},
+	{"MetalMaterial",3},
+	{"PlasticMaterial",4},
+	{"MirrorMaterial",5},
+	//{"DisneyMaterial",6},
+	{"Default",2}
+};
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -203,6 +215,7 @@ private:
 	ComPtr<IDxcBlob> m_hitMetalLibrary;
 	ComPtr<IDxcBlob> m_hitPlasticLibrary;
 	ComPtr<IDxcBlob> m_hitMirrorLibrary;
+	ComPtr<IDxcBlob> m_hitDisneyLibrary;
 
 	ComPtr<ID3D12RootSignature> m_rayGenSignature;
 	ComPtr<ID3D12RootSignature> m_hitSignature;
@@ -676,6 +689,14 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 			materialData.kd = m.kd;
 			materialData.ks = m.ks;
 			materialData.RefractiveIndex = m.RefractiveIndex;
+			materialData.specularTint = m.specularTint;
+			materialData.anisotropic = m.anisotropic;
+			materialData.sheen = m.sheen;
+			materialData.sheenTint = m.sheenTint;
+			materialData.clearcoat = m.clearcoat;
+			materialData.clearcoatGloss = m.clearcoatGloss;
+			materialData.specularTrans = m.specularTrans;
+			materialData.diffuseTrans = m.diffuseTrans;
 			materialData.Sigma = m.Sigma;
 
 			currMaterialBuffer->CopyData(m.MatIdx, materialData);
@@ -911,34 +932,14 @@ void MainApp::CreateTopLevelAS(
 			const auto& ritem = findRenderItem(mRenderItems, i);
 			const auto& material = mMaterials[ritem.materialName];
 			const auto& Shader = material.Shader;
-			if (Shader == "GlassMaterial")
+			if(ShaderToHitGroupTable.find(Shader)!=ShaderToHitGroupTable.end())
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 0));
-			else if (Shader == "GlassSpecularMaterial")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 1));
-			else if (Shader == "MatteMaterial")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 2));
-			else if (Shader == "MetalMaterial")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 3));
-			else if (Shader == "PlasticMaterial")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 4));
-			else if (Shader == "MirrorMaterial")
-				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
-					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 5));
+					gNumRayTypes * ShaderToHitGroupTable[Shader]);
 			else
 				mTopLevelASGenerator.AddInstance(instances[i].first.Get(),
 					instances[i].second, static_cast<UINT>(i),
-					static_cast<UINT>(2 * 2)); // MatteMaterial
+					gNumRayTypes * ShaderToHitGroupTable[Shader]); // MatteMaterial
 		}
 
 		// As for the bottom-level AS, the building the AS requires some scratch space
@@ -1098,6 +1099,7 @@ void MainApp::CreateRayTracingPipeline()
 	m_hitMetalLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MetalMaterial.hlsl");
 	m_hitPlasticLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_PlasticMaterial.hlsl");
 	m_hitMirrorLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_MirrorMaterial.hlsl");
+	m_hitDisneyLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Shaders\\RayTracing\\Hit_DisneyMaterial.hlsl");
 
 	// In a way similar to DLLs, each library is associated with a number of
 	// exported symbols. This
@@ -1113,6 +1115,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddLibrary(m_hitMetalLibrary.Get(), { L"ClosestHit_MetalMaterial" });
 	pipeline.AddLibrary(m_hitPlasticLibrary.Get(), { L"ClosestHit_PlasticMaterial" });
 	pipeline.AddLibrary(m_hitMirrorLibrary.Get(), { L"ClosestHit_MirrorMaterial" });
+	pipeline.AddLibrary(m_hitDisneyLibrary.Get(), { L"ClosestHit_DisneyMaterial" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"ClosestHit_Shadow" });
 	pipeline.AddLibrary(m_hitShadowLibrary.Get(), { L"AnyHit_Shadow" });
 	// To be used, each DX12 shader needs a root signature defining which
@@ -1137,6 +1140,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddHitGroup(L"HitGroup_MetalMaterial", L"ClosestHit_MetalMaterial");
 	pipeline.AddHitGroup(L"HitGroup_PlasticMaterial", L"ClosestHit_PlasticMaterial");
 	pipeline.AddHitGroup(L"HitGroup_MirrorMaterial", L"ClosestHit_MirrorMaterial");
+	pipeline.AddHitGroup(L"HitGroup_DisneyMaterial", L"ClosestHit_DisneyMaterial");
 	pipeline.AddHitGroup(L"HitGroup_Shadow", L"ClosestHit_Shadow", L"AnyHit_Shadow");
 
 	// The following section associates the root signature to each shader. Note
@@ -1151,6 +1155,7 @@ void MainApp::CreateRayTracingPipeline()
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MetalMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_PlasticMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_MirrorMaterial" });
+	pipeline.AddRootSignatureAssociation(m_hitSignature.Get(), { L"HitGroup_DisneyMaterial" });
 	pipeline.AddRootSignatureAssociation(m_hitShadowSignature.Get(), { L"HitGroup_Shadow" });
 	pipeline.AddRootSignatureAssociation(m_missSignature.Get(), { L"Miss" });
 	pipeline.AddRootSignatureAssociation(m_missShadowSignature.Get(), { L"Miss_Shadow" });
@@ -1487,6 +1492,24 @@ void MainApp::CreateShaderBindingTable() {
 			objectBufferPointer,
 			materialBufferPointer
 		});
+	//m_sbtHelper.AddHitGroup(L"HitGroup_DisneyMaterial",
+	//	{
+	//		objectBufferPointer,
+	//		materialBufferPointer,
+	//		VertexBufferPointer,
+	//		NormalBufferPointer,
+	//		TexCoordBufferPointer,
+	//		IndexBufferPointer,
+	//		NormalIndexBufferPointer,
+	//		TexCoordIndexBufferPointer,
+	//		lightBufferPointer,
+	//		heapPointer
+	//	});
+	//m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
+	//	{
+	//		objectBufferPointer,
+	//		materialBufferPointer
+	//	});
 	
 
 	// Compute the size of the SBT given the number of shaders and their

@@ -69,8 +69,8 @@ struct AreaLight
         isect.n = normal;
         isect.ng = normal;
         float3 dp = hit_point - corner;
-        float b1 = dot(dp, v1) / length(v1);
-        float b2 = dot(dp, v2) / length(v2);
+        float b1 = dot(dp, v1) / (LengthSquared(v1));
+        float b2 = dot(dp, v2) / (LengthSquared(v2));
         if (tHit < ray.TMin)
             return false;
         return b1 >= 0 && b1 <= 1 && b2 >= 0 && b2 <= 1;

@@ -74,6 +74,14 @@ struct MaterialData
     float Metallic;
     float RefraciveIndex;
     float Sigma;
+    float specularTint;
+    float anisotropic;
+    float sheen;
+    float sheenTint;
+    float clearcoat;
+    float clearcoatGloss;
+    float specularTrans;
+    float diffuseTrans;
     int DiffuseMapIdx;
     int NormalMapIdx;
 };

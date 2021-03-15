@@ -13,6 +13,7 @@
 using namespace DirectX;
 
 extern const int gNumFrameResources;
+extern std::map<std::string, UINT> ShaderToHitGroupTable;
 
 inline static DirectX::XMFLOAT3 fpToXMFLOAT3(float fp[3])
 {
@@ -105,6 +106,8 @@ void WGUILayout::ShowObjectInspector(bool* p_open, std::string objName,
 		r.matIdx = materials[r.materialName].MatIdx;
 		r.NumFramesDirty = gNumFrameResources;
 	}
+
+
 	ShowMaterialAttributes(r.materialName, materials, textures);
 
 	ImGui::End();
@@ -115,28 +118,86 @@ void WGUILayout::ShowMaterialAttributes(std::string materialName,
 {
 	if (materials.find(materialName) == materials.end()) return;
 	auto& m = materials.at(materialName);
-	if (ImGui::ColorEdit4("Albedo##value", &m.Albedo.x))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::ColorEdit4("TransColor##value", &m.TransColor.x))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("F0##value", &m.F0.x, 0.01f, 0, 8))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("k##value", &m.k.x, 0.01f, 0, 8))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("kd##value", &m.kd.x, 0.01f, 0, 8))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat3("ks##value", &m.ks.x, 0.01f, 0, 8))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat("Metallic##value", &m.Metallic, 0.01f, 0, 1))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat("Transparent##value", &m.Transparent, 0.01f, 0, 1))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat("RefractiveIndex##value", &m.RefractiveIndex, 0.01f, 0.1, 5.5))
-		m.NumFramesDirty = gNumFrameResources;
-	if (ImGui::DragFloat("Sigma##value", &m.Sigma, 0.1f, 0, 90))
-		m.NumFramesDirty = gNumFrameResources;
+	auto& Shader = m.Shader;
+	// Show Shader Name
+	static char* buff = (char*)Shader.data(); ImGui::InputText("Shader", buff, 64);
+	if (Shader == "GlassMaterial")
+	{
+		if (ImGui::ColorEdit4("Kr##value", &m.Albedo.x))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::ColorEdit4("Kt##value", &m.TransColor.x))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("smoothness##value", &m.Smoothness, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("index##value", &m.RefractiveIndex, 0.01f, 0.1, 5.5))
+			m.NumFramesDirty = gNumFrameResources;
+	}
+	else if (Shader == "GlassSpecularMaterial")
+	{
+		if (ImGui::ColorEdit4("Kr##value", &m.Albedo.x))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::ColorEdit4("Kt##value", &m.TransColor.x))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("index##value", &m.RefractiveIndex, 0.01f, 0.1, 5.5))
+			m.NumFramesDirty = gNumFrameResources;
+	}
+	else if (Shader == "MatteMaterial")
+	{
+		if (ImGui::ColorEdit4("Kd##value", &m.Albedo.x))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("Sigma##value", &m.Sigma, 0.1f, 0, 90))
+			m.NumFramesDirty = gNumFrameResources;
+	}
+	else if (Shader == "MetalMaterial")
+	{
+		if (ImGui::DragFloat3("F0##value", &m.F0.x, 0.01f, 0, 8))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat3("k##value", &m.k.x, 0.01f, 0, 8))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+	}
+	else if (Shader == "PlasticMaterial")
+	{
+		if (ImGui::DragFloat3("Kd##value", &m.kd.x, 0.01f, 0, 8))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat3("Ks##value", &m.ks.x, 0.01f, 0, 8))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("Smoothness##value", &m.Smoothness, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+	}
+	else if (Shader == "MirrorMaterial")
+	{
+		if (ImGui::ColorEdit4("Kr##value", &m.Albedo.x))
+			m.NumFramesDirty = gNumFrameResources;
+	}
+	else if (Shader == "DisneyMaterial")
+	{
+		if (ImGui::ColorEdit4("color##value", &m.Albedo.x))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("metallic##value", &m.Metallic, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("eta##value", &m.RefractiveIndex, 0.01f, 0.1, 5.5))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("smoothness##value", &m.Smoothness, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("specularTint##value", &m.specularTint, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("anisotropic##value", &m.anisotropic, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("sheen##value", &m.sheen, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("sheenTint##value", &m.sheenTint, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("clearcoat##value", &m.clearcoat, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("clearcoatGloss##value", &m.clearcoatGloss, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("specularTrans##value", &m.specularTrans, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+		if (ImGui::DragFloat("diffuseTrans##value", &m.diffuseTrans, 0.01f, 0, 1))
+			m.NumFramesDirty = gNumFrameResources;
+	}
 
 	static ImGuiComboFlags flags = 0;
 	const char* diffuseMapPreviewValue = m.DiffuseMapIdx >= 0 ? m.DiffuseMapName.c_str() : "None";

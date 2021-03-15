@@ -246,9 +246,6 @@
     <FxCompile Include="Shaders\RayTracing\microfacet.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\BxDF\DisneyDiffuse.hlsl">
-      <Filter>Shaders\BxDF</Filter>
-    </FxCompile>
     <FxCompile Include="Shaders\RayTracing\BxDF\LambertianReflection.hlsl">
       <Filter>Shaders\BxDF</Filter>
     </FxCompile>
@@ -290,6 +287,12 @@
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Hit_MirrorMaterial.hlsl">
       <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_DisneyMaterial.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\BxDF\Disney.hlsl">
+      <Filter>Shaders\BxDF</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

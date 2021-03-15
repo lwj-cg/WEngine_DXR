@@ -20,6 +20,23 @@ inline float SchlickWeight(float cosTheta)
     return (m * m) * (m * m) * m;
 }
 
+inline float FrSchlick(float R0, float cosTheta)
+{
+    return lerp(R0, 1, SchlickWeight(cosTheta));
+}
+
+inline Spectrum FrSchlick(const Spectrum R0, float cosTheta)
+{
+    return lerp(R0, (Spectrum) (1.), SchlickWeight(cosTheta));
+}
+
+// For a dielectric, R(0) = (eta - 1)^2 / (eta + 1)^2, assuming we're
+// coming from air..
+inline float SchlickR0FromEta(float eta)
+{
+    return sqr(eta - 1) / sqr(eta + 1);
+}
+
 // https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
 Spectrum FrConductor(float cosThetaI, const Spectrum etai,
                      const Spectrum etat, const Spectrum k)
@@ -47,15 +64,6 @@ Spectrum FrConductor(float cosThetaI, const Spectrum etai,
     return 0.5 * (Rp + Rs);
 }
 
-inline float FrSchlick(float R0, float cosTheta)
-{
-    return lerp(R0, 1, SchlickWeight(cosTheta));
-}
-
-inline float3 FrSchlick(const float3 R0, float cosTheta)
-{
-    return lerp(R0, (float3) (1.), SchlickWeight(cosTheta));
-}
 
 float FrDielectric(float cosThetaI, float etaI, float etaT)
 {
@@ -85,6 +93,9 @@ float FrDielectric(float cosThetaI, float etaI, float etaT)
     return (Rparl * Rparl + Rperp * Rperp) / 2;
 }
 
+///////////////////////////////////////////////////////////////////////////
+// FresnelDielectric
+
 struct FresnelDielectric
 {
     float etaI;
@@ -103,24 +114,30 @@ FresnelDielectric createFresnelDielectric(float etaI, float etaT)
     return fr;
 }
 
+///////////////////////////////////////////////////////////////////////////
+// DisneyFresnel
+
 struct DisneyFresnel
 {
-    float3 R0;
+    Spectrum R0;
     float metallic, eta;
-    float3 Evaluate(float cosI)
+    Spectrum Evaluate(float cosI)
     {
         return lerp((float3) (FrDielectric(cosI, 1, eta)), FrSchlick(R0, cosI), metallic);
     }
 };
 
-DisneyFresnel createDisneyFresnel(float3 R0, float metallic, float eta)
-{
-    DisneyFresnel fr;
-    fr.R0 = R0;
-    fr.metallic = metallic;
-    fr.eta = eta;
-    return fr;
-}
+//DisneyFresnel createDisneyFresnel(Spectrum R0, float metallic, float eta)
+//{
+//    DisneyFresnel fr;
+//    fr.R0 = R0;
+//    fr.metallic = metallic;
+//    fr.eta = eta;
+//    return fr;
+//}
+
+///////////////////////////////////////////////////////////////////////////
+// SchlickFresnel
 
 struct SchlickFresnel
 {
@@ -137,6 +154,9 @@ SchlickFresnel createSchlickFresnel(float3 R0)
     fr.R0 = R0;
     return fr;
 }
+
+///////////////////////////////////////////////////////////////////////////
+// FresnelConductor
 
 struct FresnelConductor
 {
@@ -164,15 +184,20 @@ static const FRESNEL_TYPE FRESNEL_CONDUCTOR = 1 << 1;
 static const FRESNEL_TYPE DISNEY_FRESNEL = 1 << 2;
 static const FRESNEL_TYPE FRESNEL_NOOP = 1 << 3;
 
+///////////////////////////////////////////////////////////////////////////
+// UberFresnel
+
 struct UberFresnel
 {
-    // For dielectric
+    // For FresnelDielectric
     float etaA;
     float etaB;
-    // For conductor
+    // For FresnelConductor
     Spectrum etaI;
     Spectrum etaT;
     Spectrum k;
+    // For DisneyFresnel (Reuse etaB & etaT)
+    float metallic;
     // Type
     FRESNEL_TYPE type;
     
@@ -185,6 +210,10 @@ struct UberFresnel
         else if (type&FRESNEL_CONDUCTOR)
         {
             return FrConductor(cosThetaI, etaI, etaT, k);
+        }
+        else if (type&DISNEY_FRESNEL)
+        {
+            return lerp((Spectrum) (FrDielectric(cosThetaI, 1, etaB)), FrSchlick(etaT, cosThetaI), metallic);
         }
         else
         {
@@ -209,6 +238,16 @@ UberFresnel createFresnel(Spectrum etaI, Spectrum etaT, Spectrum k)
     fresnel.etaT = etaT;
     fresnel.k = k;
     fresnel.type = FRESNEL_CONDUCTOR;
+    return fresnel;
+}
+
+UberFresnel createDisneyFresnel(Spectrum R0, float eta, float metallic)
+{
+    UberFresnel fresnel;
+    fresnel.etaB = eta;
+    fresnel.etaT = R0;
+    fresnel.metallic = metallic;
+    fresnel.type = DISNEY_FRESNEL;
     return fresnel;
 }
 

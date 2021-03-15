@@ -227,7 +227,7 @@
     <FxCompile Include="Shaders\RayTracing\BxDF\BSDFCommon.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="Shaders\RayTracing\BxDF\DisneyDiffuse.hlsl">
+    <FxCompile Include="Shaders\RayTracing\BxDF\Disney.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\BxDF\LambertianReflection.hlsl">
@@ -267,6 +267,9 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\HitCommon.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Hit_DisneyMaterial.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Hit_GlassMaterial.hlsl">

@@ -102,6 +102,14 @@ struct WMaterialData
 	float Metallic = 0.0f;
 	float RefractiveIndex = 1.5f;
 	float Sigma = 45.f;
+	float specularTint = 0.f;
+	float anisotropic = 0.f;
+	float sheen = 0.f;
+	float sheenTint = .5f;
+	float clearcoat = 0.f;
+	float clearcoatGloss = 1.f;
+	float specularTrans = 0.f;
+	float diffuseTrans = 1.f;
 	int DiffuseMapIdx = -1;
 	int NormalMapIdx = -1;
 
@@ -140,6 +148,14 @@ struct WMaterial
 	float Metallic = 0.0f;
 	float RefractiveIndex = 1.5f;
 	float Sigma = 45.f;
+	float specularTint = 0.f;
+	float anisotropic = 0.f;
+	float sheen = 0.f;
+	float sheenTint = .5f;
+	float clearcoat = 0.f;
+	float clearcoatGloss = 1.f;
+	float specularTrans = 0.f;
+	float diffuseTrans = 1.f;
 	int DiffuseMapIdx = -1;
 	int NormalMapIdx = -1;
 
@@ -266,7 +282,7 @@ struct ParallelogramLight
 	{
 		auto fv1 = DirectX::XMLoadFloat3(&v1);
 		auto fv2 = DirectX::XMLoadFloat3(&v2);
-		auto fnormal = DirectX::XMVector3Cross(fv1, fv2);
+		auto fnormal = DirectX::XMVector3Normalize(DirectX::XMVector3Cross(fv1, fv2));
 		DirectX::XMStoreFloat3(&normal, fnormal);
 	}
 };

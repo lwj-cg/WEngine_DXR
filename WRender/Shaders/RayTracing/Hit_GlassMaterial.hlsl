@@ -93,11 +93,10 @@ GlassMaterial createGlassMaterial(float3 R, float3 T, float urough, float vrough
         
     TrowbridgeReitzDistribution distrib = createTrowbridgeReitzDistribution(urough, vrough);
     //BeckmannDistribution distrib = createBeckmannDistribution(urough, vrough);
-    FresnelDielectric fresnel = createFresnelDielectric(1, eta);
+    UberFresnel fresnel = createFresnel(1, eta);
         
-    mat.microRefl = createMicrofacetReflection(R, distrib, fresnel);
-    
-    mat.microTrans = createMicrofacetTransmission(T, 1.f, eta, distrib, fresnel);
+    mat.microRefl = createMicrofacetReflection(R, distrib, fresnel);    
+    mat.microTrans = createMicrofacetTransmission(T, 1.f, eta, distrib);
     
     return mat;
 }
