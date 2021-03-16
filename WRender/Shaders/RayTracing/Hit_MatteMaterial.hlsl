@@ -22,7 +22,7 @@ struct MatteMaterial
         Spectrum f = (float3) 0.f;
         if (reflect)
         {
-            if (sigma==0)
+            if (sigma<=0.1)
             {
                 f = lambertianRefl.f(wo, wi);
             }
@@ -40,7 +40,7 @@ struct MatteMaterial
         if (wo.z == 0)
             return 0.;
         float pdf = 0.f;
-        if(sigma==0)
+        if(sigma<=0.1)
         {
             if (MatchesFlags(lambertianRefl.type, flags))
             {
@@ -61,7 +61,7 @@ struct MatteMaterial
             return (float3) 0.;
         pdf = 0;
         Spectrum f;
-        if (sigma == 0)
+        if (sigma <= 0.1)
         {
             f = lambertianRefl.Sample_f(wo, wi, u, pdf, sampledType);
             sampledType = lambertianRefl.type;

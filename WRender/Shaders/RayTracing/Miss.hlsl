@@ -13,6 +13,7 @@ TextureCube gCubeMap : register(t1);
 void Miss(inout RayPayload payload)
 {
     //payload.radiance = float3(0.0f, 0.0f, 0.0f);
+    //payload.emission = float3(0.0f, 0.0f, 0.0f);
     float3 ray_direction = WorldRayDirection();
     payload.radiance = gCubeMap.SampleLevel(gsamLinearWrap, normalize(ray_direction), 0).rgb;
     payload.emission = gCubeMap.SampleLevel(gsamLinearWrap, normalize(ray_direction), 0).rgb;
