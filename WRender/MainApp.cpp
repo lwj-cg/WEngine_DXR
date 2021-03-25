@@ -341,8 +341,8 @@ bool MainApp::Initialize()
 		mClientWidth, mClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
 
 	// Setup scene with XML description file
-	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
-	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\EnvironmentMap.xml");
+	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
+	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\EnvironmentMap.xml");
 	BuildFrameResources();
 
 	// Execute the initialization commands.
@@ -390,17 +390,17 @@ void MainApp::OnResize()
 
 	mCamera.SetLens(0.25f * MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
 
-	if (mPathTracer != nullptr)
-	{
-		mPathTracer->OnResize(mClientWidth, mClientHeight);
-	}
-
-	//if (m_outputResource)
+	//if (mPathTracer != nullptr)
 	//{
-	//	// Resize the output buffer
-	//	CreateRaytracingOutputBuffer();
-	//	CreateShaderResourceHeap();
+	//	mPathTracer->OnResize(mClientWidth, mClientHeight);
 	//}
+
+	if (m_outputResource)
+	{
+		// Resize the output buffer
+		CreateRaytracingOutputBuffer();
+		CreateShaderResourceHeap();
+	}
 
 }
 

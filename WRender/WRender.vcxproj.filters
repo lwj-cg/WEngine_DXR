@@ -196,6 +196,9 @@
     <Xml Include="..\Scenes\CornellBox.xml">
       <Filter>Resource Files\Scenes</Filter>
     </Xml>
+    <Xml Include="..\Scenes\EnvironmentMap.xml">
+      <Filter>Resource Files\Scenes</Filter>
+    </Xml>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\RayTracing\ClosestHit_Diffuse.hlsl">
@@ -294,5 +297,8 @@
     <FxCompile Include="Shaders\RayTracing\BxDF\Disney.hlsl">
       <Filter>Shaders\BxDF</Filter>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" />
   </ItemGroup>
 </Project>

@@ -219,6 +219,7 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="..\Scenes\CornellBox.xml" />
+    <Xml Include="..\Scenes\EnvironmentMap.xml" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders\RayTracing\BxDF\FresnelSpecular.hlsl">
@@ -317,6 +318,9 @@
     <FxCompile Include="Shaders\RayTracing\Sampling.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
