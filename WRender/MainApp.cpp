@@ -342,7 +342,11 @@ bool MainApp::Initialize()
 
 	// Setup scene with XML description file
 	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
-	SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\EnvironmentMap.xml");
+	//mPassItem.SceneName = "CornellBox";
+	mPassItem.SceneName = "EnvironmentMap";
+	char sceneFileName[50];
+	std::sprintf(sceneFileName, "D:\\projects\\WEngine_DXR\\Scenes\\%s.xml", mPassItem.SceneName.c_str());
+	SetupSceneWithXML(sceneFileName);
 	BuildFrameResources();
 
 	// Execute the initialization commands.
@@ -538,7 +542,7 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 
-	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassItem, mRenderItems, mMaterials, mTextures, mNumFaces);
+	WGUILayout::DrawGUILayout(mCommandList, mSrvHeap, mPassItem, mRenderItems, mMaterials, mTextures);
 
 	// Done recording commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -1588,7 +1592,7 @@ void MainApp::SetupSceneWithXML(const char* filename)
 	const auto& cameraConfig = mSceneDescParser.getCameraConfig();
 	const auto& lights = mSceneDescParser.getLights();
 
-	mNumFaces = indexBuffer.size() / 3;
+	mPassItem.NumFaces = indexBuffer.size() / 3;
 
 	UINT64 vertexBufferSize = vertexBuffer.size() * sizeof(tinyobj::real_t);
 	mVertexBuffer = d3dUtil::CreateDefaultBuffer(

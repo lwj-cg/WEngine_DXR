@@ -39,15 +39,12 @@ public:
 	typedef std::unordered_map<std::string, std::unique_ptr<WTexture>> TextureList;
 	WGUILayout() = default;
 	static void HelpMarker(const char* desc);
-	static void ShowAppPropertyEditor(bool* p_open, MaterialList& materials);
 	static void ShowObjectInspector(bool* p_open, std::string objName, RenderItemList& renderItems, MaterialList& materials, TextureList& textures);
 	static void ShowMaterialAttributes(std::string materialName, MaterialList& materials, TextureList& textures);
 	static void ShowMaterialModifier(bool* p_open, std::string materialName, MaterialList& materials, TextureList& textures);
-	static void ShowPlaceholderObject(const char* prefix, int uid,
-		MaterialList& materials, const char* material_name);
 	static void DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList, 
 		const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap, 
-		PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces);
+		PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures);
 };
 
 // Helper to display a little (?) mark which shows a tooltip when hovered.
@@ -305,7 +302,7 @@ void WGUILayout::ShowMaterialModifier(bool* p_open, std::string materialName,
 
 void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& mCommandList,
 	const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& mSrvHeap,
-	PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures, UINT numFaces)
+	PassData& passData, RenderItemList& renderItems, MaterialList& materials, TextureList& textures)
 {
 	//// Prepare
 	//static std::vector<std::string> OrderedRenderItemNames(renderItems.size());
@@ -406,8 +403,8 @@ void WGUILayout::DrawGUILayout(const Microsoft::WRL::ComPtr<ID3D12GraphicsComman
 	//	ImGui::EndMenuBar();
 	//}
 
-	ImGui::Text("Scene: CornellBox");
-	ImGui::Text("Number of faces: %d", numFaces);
+	ImGui::Text("Scene: %s", passData.SceneName.c_str());
+	ImGui::Text("Number of faces: %d", passData.NumFaces);
 	ImGui::Text("Num static frames: %d", passData.NumStaticFrame);
 	if(ImGui::SliderInt("Sqrt Samples##value", (int*)&passData.SqrtSamples, 1, 8))
 		passData.NumFramesDirty = gNumFrameResources;

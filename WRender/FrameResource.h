@@ -49,10 +49,12 @@ struct WPassConstants
 
 struct WPassConstantsItem
 {
+	std::string SceneName = "";
 	float SceneEpsilon = 0.01f;
 	UINT NumStaticFrame = 1;
 	UINT SqrtSamples = 2;
 	UINT MaxDepth = 16;
+	UINT NumFaces = 0;
 
 	// Dirty flag indicating the material has changed and we need to update the constant buffer.
 	// Because we have a material constant buffer for each FrameResource, we have to apply the

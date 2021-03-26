@@ -186,9 +186,14 @@ void ClosestHit_MatteMaterial(inout RayPayload current_payload, Attributes attri
     uint matIdx = objectData.MatIdx;
     MaterialData matData = gMaterialBuffer[matIdx];
     
+    // Calculate Tangent & Bitangent
+    float4x4 inverseTranspose = objectData.InverseTranspose;
+    float3 tangent, bitangent;
+    caluculateTangentAndBitangent(v0, v1, v2, uv0, uv1, uv2, tangent, bitangent);
+    float3 tangentW = mul(tangent, (float3x3) inverseTranspose);
+    
     // Calculate Normal
     float3 geometric_normal = normalize(cross(v1 - v0, v2 - v0));
-    float4x4 inverseTranspose = objectData.InverseTranspose;
     float3 world_geometric_normal = mul(geometric_normal, (float3x3) inverseTranspose);
     world_geometric_normal = normalize(world_geometric_normal);
     float3 ray_direction = normalize(WorldRayDirection());
@@ -197,7 +202,7 @@ void ClosestHit_MatteMaterial(inout RayPayload current_payload, Attributes attri
     if (normalMapIdx >= 0)
     {
         float3 shading_normal = gTextureMaps[normalMapIdx].SampleLevel(gsamAnisotropicWrap, uv, 0).rgb;
-        float3 world_shading_normal = mul(shading_normal, (float3x3) inverseTranspose);
+        float3 world_shading_normal = NormalSampleToWorldSpace(shading_normal, world_geometric_normal, tangentW);
         ffnormal = normalize(world_shading_normal);
     }
     else

@@ -106,4 +106,47 @@ inline float Radians(float deg)
     return (M_PI / 180.f) * deg;
 }
 
+inline void caluculateTangentAndBitangent(float3 pos0, float3 pos1, float3 pos2, 
+    float2 uv0, float2 uv1, float2 uv2, out float3 tangent, out float3 bitangent)
+{
+    float3 edge1 = pos1 - pos0;
+    float3 edge2 = pos2 - pos0;
+    float2 deltaUV1 = uv1 - uv0;
+    float2 deltaUV2 = uv2 - uv0;
+    
+    float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+    tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+    tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+    tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+    tangent = normalize(tangent);
+
+    bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+    bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+    bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+    bitangent = normalize(bitangent);
+}
+
+//---------------------------------------------------------------------------------------
+// Transforms a normal map sample to world space.
+//---------------------------------------------------------------------------------------
+float3 NormalSampleToWorldSpace(float3 normalMapSample, float3 unitNormalW, float3 tangentW)
+{
+	// Uncompress each component from [0,1] to [-1,1].
+    float3 normalT = 2.0f * normalMapSample - 1.0f;
+
+	// Build orthonormal basis.
+    float3 N = unitNormalW;
+    float3 T = normalize(tangentW - dot(tangentW, N) * N);
+    float3 B = cross(N, T);
+
+    float3x3 TBN = float3x3(T, B, N);
+
+	// Transform from tangent space to world space.
+    float3 bumpedNormalW = mul(normalT, TBN);
+
+    return bumpedNormalW;
+}
+
+
 #endif
