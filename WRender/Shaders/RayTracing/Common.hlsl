@@ -32,7 +32,7 @@ struct RayPayload
     float3 attenuation;
     float3 emission;
 	uint seed;
-	uint depth;
+    uint dimension;
     BxDFType bxdfType;
     bool done;
 };

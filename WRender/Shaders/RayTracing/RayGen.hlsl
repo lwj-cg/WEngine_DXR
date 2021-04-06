@@ -1,6 +1,8 @@
 #include "Common.hlsl"
 #include "Random.hlsl"
 #include "Helpers.hlsl"
+#include "Samplers/lowdiscrepancy.hlsl"
+#include "Samplers/halton.hlsl"
 
 // Constant data that varies per material.
 cbuffer cbPass : register(b0)
@@ -39,23 +41,40 @@ void RayGen()
 
 	// Get the location within the dispatched 2D grid of work items
 	// (often maps to pixels, so this could represent a pixel coordinate).
+    //uint2 launchIndex = DispatchRaysIndex().xy;
+    //float2 dims = float2(DispatchRaysDimensions().xy);
+    //float2 inv_screen = 1.0f / dims * 2.0f;
+    //float2 jitter_scale = inv_screen / num_sqrt_samples;
+    //uint samples_per_pixel = num_sqrt_samples * num_sqrt_samples;
+    //uint pixel_id = (launchIndex.y * dims.x + launchIndex.x) * (samples_per_pixel + 1);
+    //float2 pixel = launchIndex * inv_screen - 1.0f;
+    //float3 color_result = float3(0.0f, 0.0f, 0.0f);
+    //uint camera_static_frames = gNumStaticFrame;
+    //uint seed = tea16(pixel_id, camera_static_frames);
+    
     uint2 launchIndex = DispatchRaysIndex().xy;
     float2 dims = float2(DispatchRaysDimensions().xy);
-    float2 inv_screen = 1.0f / dims * 2.0f;
-    float2 jitter_scale = inv_screen / num_sqrt_samples;
+    float2 inv_screen = 1.0f / dims;
+    float2 jitter_scale = inv_screen;
     uint samples_per_pixel = num_sqrt_samples * num_sqrt_samples;
-    uint pixel_id = (launchIndex.y * dims.x + launchIndex.x) * (samples_per_pixel + 1);
-    float2 pixel = launchIndex * inv_screen - 1.0f;
+    float2 pixel = launchIndex * inv_screen;
     float3 color_result = float3(0.0f, 0.0f, 0.0f);
     uint camera_static_frames = gNumStaticFrame;
-    uint seed = tea16(pixel_id, camera_static_frames);
+    
+    HaltonSampler mySampler = createHaltonSampler(launchIndex);
+    
     //float z = rnd(seed);
     for (uint samples_index = 0; samples_index < samples_per_pixel; ++samples_index)
     {
-        uint x = samples_index % num_sqrt_samples;
-        uint y = samples_index / num_sqrt_samples;
-        float2 jitter = float2(x - rnd(seed), y - rnd(seed));
-        float2 d = pixel + jitter * jitter_scale;
+        //uint x = samples_index % num_sqrt_samples;
+        //uint y = samples_index / num_sqrt_samples;
+        //float2 jitter = float2(x - rnd(seed), y - rnd(seed));
+        //float2 d = pixel + jitter * jitter_scale;
+        
+        mySampler.SetSampleNumber(camera_static_frames * samples_per_pixel + samples_index);
+        uint seed = mySampler.intervalSampleIndex;
+        float2 offset = mySampler.Get2D();
+        float2 d = pixel + offset * inv_screen;
 		// 观察空间到世界空间变换
         float3 origin = gEyePosW;
 		// 投影空间变换到观察空间
@@ -67,7 +86,7 @@ void RayGen()
         RayPayload payload;
         payload.radiance = float3(0, 0, 0);
         payload.attenuation = float3(1, 1, 1);
-        payload.depth = 0;
+        payload.dimension = 2;
         payload.seed = seed;
         payload.done = false;
         payload.bxdfType = BSDF_ALL;
@@ -101,7 +120,6 @@ void RayGen()
 
             float3 Ld = beta * payload.radiance;
             L += Ld;
-            payload.depth++;
 
             // Get new path direction
             beta *= payload.attenuation;
@@ -114,14 +132,14 @@ void RayGen()
             if (bounces > rr_begin_depth)
             {
                 float q = max(.05f, 1 - MaxComponentValue(rrBeta));
-                if (rnd(payload.seed) < q)
+                if (mySampler.Get1D(payload.dimension) < q)
                     break;
                 beta /= 1-q;
             }
         }
 
         color_result += L;
-        seed = payload.seed;
+        //seed = payload.seed;
     }
 
     color_result /= samples_per_pixel;

@@ -153,6 +153,7 @@
     <ClCompile Include="..\Common\GameTimer.cpp" />
     <ClCompile Include="..\Common\GeometryGenerator.cpp" />
     <ClCompile Include="..\Common\MathHelper.cpp" />
+    <ClCompile Include="Core\LowDiscrepancy.cpp" />
     <ClCompile Include="Core\PathTracer.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
@@ -208,6 +209,9 @@
     <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="Include\GeometryShape.h" />
     <ClInclude Include="Include\IntersectionHelper.h" />
+    <ClInclude Include="Include\LowDiscrepancy.h" />
+    <ClInclude Include="Include\LowDiscrepancyConsts.h" />
+    <ClInclude Include="Include\rng.h" />
     <ClInclude Include="Include\tiny_obj_loader.h" />
     <ClInclude Include="Include\WGUILayout.h" />
     <ClInclude Include="nv_helpers_dx12\BottomLevelASGenerator.h" />
@@ -313,6 +317,15 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\RayGen.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Samplers\halton.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Samplers\lowdiscrepancy.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Samplers\lowdiscrepancyconsts.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\Sampling.hlsl">

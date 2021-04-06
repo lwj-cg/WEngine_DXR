@@ -12,6 +12,8 @@
 #include "Utils/WSceneDescParser.h"
 #include "Include/WGUILayout.h"
 #include "Include/GeometryShape.h"
+#include "Include/LowDiscrepancy.h"
+#include "Include/rng.h"
 #include "Core/PathTracer.h"
 // DX12 RayTracing Helpers
 #include "DXRHelper.h"
@@ -281,6 +283,10 @@ private:
 	// num static frame
 	UINT mNumStaticFrame = 0;
 	UINT mNumFaces = 0;
+
+	std::vector<uint32_t> mRadicalInversePermutations;
+	ComPtr<ID3D12Resource> mPermutationsBuffer = nullptr;
+	ComPtr<ID3D12Resource> mPermutationsUploadBuffer = nullptr;
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
@@ -342,12 +348,23 @@ bool MainApp::Initialize()
 
 	// Setup scene with XML description file
 	//SetupSceneWithXML("D:\\projects\\WEngine_DXR\\Scenes\\CornellBox.xml");
-	//mPassItem.SceneName = "CornellBox";
-	mPassItem.SceneName = "EnvironmentMap";
+	mPassItem.SceneName = "CornellBox";
+	//mPassItem.SceneName = "EnvironmentMap";
 	char sceneFileName[50];
 	std::sprintf(sceneFileName, "D:\\projects\\WEngine_DXR\\Scenes\\%s.xml", mPassItem.SceneName.c_str());
 	SetupSceneWithXML(sceneFileName);
 	BuildFrameResources();
+
+	RNG rng;
+	mRadicalInversePermutations = ComputeRadicalInversePermutations(rng);
+	UINT64 byteSize = mRadicalInversePermutations.size() * sizeof(uint32_t);
+	mPermutationsBuffer = d3dUtil::CreateDefaultBuffer(
+		md3dDevice.Get(),
+		mCommandList.Get(),
+		mRadicalInversePermutations.data(),
+		byteSize,
+		mPermutationsUploadBuffer
+	);
 
 	// Execute the initialization commands.
 	ThrowIfFailed(mCommandList->Close());
@@ -997,6 +1014,7 @@ ComPtr<ID3D12RootSignature> MainApp::CreateRayGenSignature() {
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0);    // b0 : passCB
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 1);  // t0, space1 : objectBufferArray
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 2);  // t0, space2 : MaterialBuffer
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 100); // t0, space100 : RadicalInversePermutations
 	rsc.AddHeapRangesParameter(
 		{
 			{
@@ -1029,6 +1047,7 @@ ComPtr<ID3D12RootSignature> MainApp::CreateHitSignature() {
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 7);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 8);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 9);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0, 100); // RadicalInversePermutations
 	rsc.AddHeapRangesParameter(
 		{
 			{
@@ -1373,12 +1392,14 @@ void MainApp::CreateShaderBindingTable() {
 	auto NormalIndexBufferPointer = reinterpret_cast<UINT64*>(mNormalIndexBuffer->GetGPUVirtualAddress());
 	auto TexCoordIndexBufferPointer = reinterpret_cast<UINT64*>(mTexCoordIndexBuffer->GetGPUVirtualAddress());
 	auto lightBufferPointer = reinterpret_cast<UINT64*>(mLightBuffer->GetGPUVirtualAddress());
+	auto permutationsBufferPointer = reinterpret_cast<UINT64*>(mPermutationsBuffer->GetGPUVirtualAddress());
 	// The ray generation only uses heap data
 	m_sbtHelper.AddRayGenerationProgram(L"RayGen",
 		{
 			passCBPointer,
 			objectBufferPointer,
 			materialBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 
@@ -1399,6 +1420,7 @@ void MainApp::CreateShaderBindingTable() {
 			NormalIndexBufferPointer,
 			TexCoordIndexBufferPointer,
 			lightBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
@@ -1417,6 +1439,7 @@ void MainApp::CreateShaderBindingTable() {
 			NormalIndexBufferPointer,
 			TexCoordIndexBufferPointer,
 			lightBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
@@ -1435,6 +1458,7 @@ void MainApp::CreateShaderBindingTable() {
 			NormalIndexBufferPointer,
 			TexCoordIndexBufferPointer,
 			lightBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
@@ -1453,6 +1477,7 @@ void MainApp::CreateShaderBindingTable() {
 			NormalIndexBufferPointer,
 			TexCoordIndexBufferPointer,
 			lightBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
@@ -1471,6 +1496,7 @@ void MainApp::CreateShaderBindingTable() {
 			NormalIndexBufferPointer,
 			TexCoordIndexBufferPointer,
 			lightBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",
@@ -1489,6 +1515,7 @@ void MainApp::CreateShaderBindingTable() {
 			NormalIndexBufferPointer,
 			TexCoordIndexBufferPointer,
 			lightBufferPointer,
+			permutationsBufferPointer,
 			heapPointer
 		});
 	m_sbtHelper.AddHitGroup(L"HitGroup_Shadow",

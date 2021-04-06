@@ -28,6 +28,9 @@
     <Filter Include="Shaders\BxDF">
       <UniqueIdentifier>{be4f5f61-a46b-42cc-a095-2f464586a162}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shaders\Samplers">
+      <UniqueIdentifier>{5c6a25ba-293e-4069-b372-e80b0f00dd0e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FrameResource.cpp">
@@ -97,6 +100,9 @@
       <Filter>nv_helpers_dx12</Filter>
     </ClCompile>
     <ClCompile Include="Utils\WSceneDescParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Core\LowDiscrepancy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -189,6 +195,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Include\tiny_obj_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\LowDiscrepancyConsts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\rng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\LowDiscrepancy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -296,6 +311,15 @@
     </FxCompile>
     <FxCompile Include="Shaders\RayTracing\BxDF\Disney.hlsl">
       <Filter>Shaders\BxDF</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Samplers\halton.hlsl">
+      <Filter>Shaders\Samplers</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Samplers\lowdiscrepancy.hlsl">
+      <Filter>Shaders\Samplers</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\RayTracing\Samplers\lowdiscrepancyconsts.hlsl">
+      <Filter>Shaders\Samplers</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
