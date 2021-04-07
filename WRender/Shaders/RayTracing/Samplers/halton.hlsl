@@ -14,7 +14,6 @@ static int multInverse1 = 131;
 
 struct HaltonSampler
 {
-    int2 pixelForOffset;
     int offsetForCurrentPixel;
     int2 currentPixel;
     int currentPixelSampleIndex;
@@ -25,9 +24,9 @@ struct HaltonSampler
     {
         offsetForCurrentPixel = 0;
         int2 pm = int2(currentPixel[0] % kMaxResolution, currentPixel[1] % kMaxResolution);
-        int dimOffset = InverseRadicalInverse(2, pm[0], baseExponents0);
+        uint dimOffset = InverseRadicalInverse(2, pm[0], baseExponents0);
         offsetForCurrentPixel += dimOffset * baseScales1 * multInverse0;
-        dimOffset = InverseRadicalInverse(3, pm[0], baseExponents1);
+        dimOffset = InverseRadicalInverse(3, pm[1], baseExponents1);
         offsetForCurrentPixel += dimOffset * baseScales0 * multInverse1;
         offsetForCurrentPixel %= sampleStride;
     }
@@ -76,15 +75,21 @@ struct HaltonSampler
     
     float Get1D(inout int dimension)
     {
-        float p = SampleDimension(intervalSampleIndex, dimension);
-        dimension++;
-        return p;
+        return SampleDimension(intervalSampleIndex, dimension++);
     }
     
     float2 Get2D()
     {
         float2 p = float2(SampleDimension(intervalSampleIndex, dimension),
                           SampleDimension(intervalSampleIndex, dimension + 1));
+        dimension += 2;
+        return p;
+    }
+    
+    float2 Get2DForPixel()
+    {
+        float2 p = float2(SampleDimension0(intervalSampleIndex),
+                          SampleDimension1(intervalSampleIndex));
         dimension += 2;
         return p;
     }
@@ -106,6 +111,7 @@ HaltonSampler createHaltonSampler(int2 currentPixel)
     haltonSampler.dimension = 0;
     haltonSampler.intervalSampleIndex = 0;
     haltonSampler.currentPixelSampleIndex = 0;
+    haltonSampler.initializeOffsetForCurrentPixel();
     return haltonSampler;
 }
 
@@ -113,6 +119,7 @@ HaltonSampler createHaltonSampler(int2 currentPixel)
 HaltonSampler createHaltonSampler(int intervalSampleIndex)
 {
     HaltonSampler haltonSampler;
+    haltonSampler.currentPixel = int2(0, 0);
     haltonSampler.dimension = 0;
     haltonSampler.offsetForCurrentPixel = 0;
     haltonSampler.currentPixelSampleIndex = 0;

@@ -7,6 +7,7 @@
 #include "Helpers.hlsl"
 #include "Light.hlsl"
 #include "Random.hlsl"
+#include "Samplers/halton.hlsl"
 
 struct GlassSpecularMaterial
 {
@@ -148,9 +149,8 @@ void ClosestHit_GlassSpecularMaterial(inout RayPayload current_payload, Attribut
     current_payload.radiance = (float3) 0.f;
 
     // Sample BSDF to get new path direction
-    float u1 = rnd(current_payload.seed);
-    float u2 = rnd(current_payload.seed);
-    float2 u = float2(u1, u2);
+    HaltonSampler mySampler = createHaltonSampler(current_payload.seed);
+    float2 u = mySampler.Get2D(current_payload.dimension);
     float3 wi;
     float pdf;
     BxDFType type = BSDF_ALL;

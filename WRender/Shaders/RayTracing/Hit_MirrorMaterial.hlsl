@@ -7,6 +7,7 @@
 #include "Light.hlsl"
 #include "Random.hlsl"
 #include "fresnel.hlsl"
+#include "Samplers/halton.hlsl"
 
 struct MirrorMaterial
 {
@@ -126,9 +127,7 @@ void ClosestHit_MirrorMaterial(inout RayPayload current_payload, Attributes attr
     current_payload.radiance = (float3) 0.f;
 
     // Sample BSDF to get new path direction
-    float u1 = rnd(current_payload.seed);
-    float u2 = rnd(current_payload.seed);
-    float2 u = float2(u1, u2);
+    float2 u = float2(0, 0);
     float3 wi;
     float pdf;
     BxDFType type = BSDF_ALL;

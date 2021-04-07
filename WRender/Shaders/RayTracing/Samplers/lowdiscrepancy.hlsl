@@ -47,7 +47,7 @@ float RadicalInverse(int baseIndex, uint a)
     switch (baseIndex)
     {
         case 0:
-            return ReverseBits32(a);
+            return ReverseBits32(a)*0x1p-32;
         default:
             return RadicalInverseSpecialized(Primes[baseIndex], a);
     }

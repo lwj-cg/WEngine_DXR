@@ -43,7 +43,7 @@ struct WPassConstants
 	float SceneEpsilon = 0.01f;
 	DirectX::XMFLOAT4 bgColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 	UINT NumStaticFrame = 1;
-	UINT SqrtSamples = 2;
+	UINT SqrtSamples = 1;
 	UINT MaxDepth = 16;
 };
 
@@ -52,7 +52,7 @@ struct WPassConstantsItem
 	std::string SceneName = "";
 	float SceneEpsilon = 0.01f;
 	UINT NumStaticFrame = 1;
-	UINT SqrtSamples = 2;
+	UINT SqrtSamples = 1;
 	UINT MaxDepth = 16;
 	UINT NumFaces = 0;
 

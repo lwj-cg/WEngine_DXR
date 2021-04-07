@@ -400,6 +400,7 @@ bool MainApp::Initialize()
 	//CreateTextureShaderResourceHeap();
 	// Create the shader binding table and indicating which shaders
 	// are invoked for each instance in the  AS
+	mCurrFrameResource = mFrameResources[mCurrFrameResourceIndex].get();
 	CreateShaderBindingTable();
 
 	return true;
@@ -497,6 +498,8 @@ void MainApp::DrawForRayTracing(const GameTimer& gt)
 		m_outputResource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	mCommandList->ResourceBarrier(1, &transition);
+
+	CreateShaderBindingTable();
 
 	// Setup the raytracing task
 	D3D12_DISPATCH_RAYS_DESC desc = {};
@@ -731,7 +734,8 @@ void MainApp::UpdateMaterialBuffer(const GameTimer& gt)
 
 void MainApp::UpdateMainPassCB(const GameTimer& gt)
 {
-	++mNumStaticFrame %= 10000000;
+	++mNumStaticFrame;
+	mNumStaticFrame %= 10000000;
 
 	XMMATRIX view = mCamera.GetView();
 	XMMATRIX proj = mCamera.GetProj();
@@ -1378,11 +1382,11 @@ void MainApp::CreateShaderBindingTable() {
 	// struct is a UINT64, which then has to be reinterpreted as a pointer.
 	auto heapPointer = reinterpret_cast<UINT64*>(srvUavHeapHandle.ptr);
 
-	auto currentPassCB = mFrameResources[mCurrFrameResourceIndex]->PassCB.get();
+	auto currentPassCB = mCurrFrameResource->PassCB.get();
 	auto passCBPointer = reinterpret_cast<UINT64*>(currentPassCB->Resource()->GetGPUVirtualAddress());
-	auto currentObjectBuffer = mFrameResources[mCurrFrameResourceIndex]->ObjectBuffer.get();
+	auto currentObjectBuffer = mCurrFrameResource->ObjectBuffer.get();
 	auto objectBufferPointer = reinterpret_cast<UINT64*>(currentObjectBuffer->Resource()->GetGPUVirtualAddress());
-	auto currentMaterialBuffer = mFrameResources[mCurrFrameResourceIndex]->MaterialBuffer.get();
+	auto currentMaterialBuffer = mCurrFrameResource->MaterialBuffer.get();
 	auto materialBufferPointer = reinterpret_cast<UINT64*>(currentMaterialBuffer->Resource()->GetGPUVirtualAddress());
 
 	auto VertexBufferPointer = reinterpret_cast<UINT64*>(mVertexBuffer->GetGPUVirtualAddress());

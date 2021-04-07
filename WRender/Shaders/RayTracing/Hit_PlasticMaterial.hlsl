@@ -8,6 +8,7 @@
 #include "Light.hlsl"
 #include "Random.hlsl"
 #include "fresnel.hlsl"
+#include "Samplers/halton.hlsl"
 
 struct PlasticMaterial
 {
@@ -219,12 +220,9 @@ void ClosestHit_PlasticMaterial(inout RayPayload current_payload, Attributes att
     }
     
     float3 hitpoint = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
-    float uLight1 = rnd(current_payload.seed);
-    float uLight2 = rnd(current_payload.seed);
-    float uScattering1 = rnd(current_payload.seed);
-    float uScattering2 = rnd(current_payload.seed);
-    float2 uLight = float2(uLight1, uLight2);
-    float2 uScattering = float2(uScattering1, uScattering2);
+    HaltonSampler mySampler = createHaltonSampler(current_payload.seed);
+    float2 uLight = mySampler.Get2D(current_payload.dimension);
+    float2 uScattering = mySampler.Get2D(current_payload.dimension);
     
     // Fecth data needed by BxDF from MaterialData
     int diffuseMapIdx = matData.DiffuseMapIdx;
@@ -257,9 +255,7 @@ void ClosestHit_PlasticMaterial(inout RayPayload current_payload, Attributes att
     current_payload.radiance = Ld;
 
     // Sample BSDF to get new path direction
-    float u1 = rnd(current_payload.seed);
-    float u2 = rnd(current_payload.seed);
-    float2 u = float2(u1, u2);
+    float2 u = mySampler.Get2D(current_payload.dimension);
     float3 wi;
     float pdf;
     BxDFType type = BSDF_ALL;
