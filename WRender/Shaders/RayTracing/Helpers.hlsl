@@ -134,6 +134,7 @@ float3 NormalSampleToWorldSpace(float3 normalMapSample, float3 unitNormalW, floa
 {
 	// Uncompress each component from [0,1] to [-1,1].
     float3 normalT = 2.0f * normalMapSample - 1.0f;
+    normalT.y = -normalT.y;
 
 	// Build orthonormal basis.
     float3 N = unitNormalW;
